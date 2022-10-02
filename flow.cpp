@@ -105,11 +105,24 @@ struct key_equal : public binary_function<tuple_key, tuple_key, bool>
 };
 
 typedef unordered_map<tuple_key, netflow5_record, key_hash, key_equal> map_t;
-string get_ip(struct in_addr address)
+int check_number(char *number)
 {
-    char addr[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &(address), addr, INET_ADDRSTRLEN);
-    printf("addr %s\n", addr);
+    char *fail_ptr = NULL;
+    string err_msg = "-n argument has to be a positive integer\n";
+    int num = strtol(number, &fail_ptr, 10);
+
+    if (*fail_ptr)
+    {
+        cout << err_msg;
+        exit(EXIT_FAILURE);
+    }
+
+    if (num < 1)
+    {
+        cout << err_msg;
+        exit(EXIT_FAILURE);
+    }
+    return num;
 }
 
 tuple<uint32_t, uint32_t, int, int, int, int> ipv4_packet(const u_char *packet, int total_length)
@@ -166,8 +179,10 @@ int main(int argc, char *argv[])
 
     int opt;
     char *file = NULL;
+    string collector_ip = "127.0.0.1:2055";
     int active_timeout = 60;
     int inactive_timeout = 10;
+    int limit = 1024;
 
     /***************************************************************************************
      *    Title:  Optional arguments with getopt_long(3)
@@ -178,37 +193,35 @@ int main(int argc, char *argv[])
      ***************************************************************************************/
     // The argument parsing was inspired by the mentioned above
 
-    const struct option options[] =
-        {
+    int option;
 
-            {"file", optional_argument, 0, 'f'},
-
-            {NULL, 0, 0, '\0'}};
-
-    while ((opt = getopt_long(argc, argv, "f::", options, NULL)) != -1)
+    while ((option = getopt(argc, argv, "f:c:a:i:m:")) != -1)
     {
-        printf("%d\n", opt);
-        switch (opt)
+        switch (option)
         {
 
-        case 'f': // option with optional argument
-            if (optarg == NULL)
-            {
-                printf("default");
-            }
-            else
-            {
-
-                file = optarg;
-                printf("%s\n", optarg);
-            }
+        case 'f':
+            file = optarg;
+            break;
+        case 'c':
+            collector_ip = optarg;
+            break;
+        case 'a':
+            active_timeout = check_number(optarg);
+            break;
+        case 'i':
+            inactive_timeout = check_number(optarg);
+            break;
+        case 'm':
+            limit = check_number(optarg);
             break;
 
         default:
-            cerr << usage;
-            return EXIT_FAILURE;
+            cout << usage;
+            exit(EXIT_FAILURE);
         }
     }
+
     pcap_t *handle;
     char errbuf[PCAP_ERRBUF_SIZE];
     struct pcap_pkthdr header;
@@ -233,7 +246,7 @@ int main(int argc, char *argv[])
     if (!file)
     {
         // TODO: ARGUMENTS
-        handle = pcap_open_offline(argv[1], errbuf);
+        handle = pcap_open_offline("-", errbuf);
         if (handle == NULL)
         {
             printf("Could not open file %s: %s\n", argv[1], errbuf);
@@ -243,7 +256,7 @@ int main(int argc, char *argv[])
     else
     {
         // handle = pcap_fopen_offline(stdin, errbuf);
-        handle = pcap_open_offline(argv[1], errbuf);
+        handle = pcap_open_offline(file, errbuf);
         if (handle == NULL)
         {
             printf("Could not open file %s: %s\n", argv[1], errbuf);
