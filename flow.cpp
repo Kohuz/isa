@@ -13,6 +13,7 @@
 #include <netinet/if_ether.h>
 #include <time.h>
 #include <iostream>
+#include <tuple>
 #include <unordered_map>
 
 using namespace std;
@@ -39,8 +40,8 @@ struct Packet
 // https://github.com/aabc/ipt-netflow/blob/master/ipt_NETFLOW.h
 struct netflow5_record
 {
-    uint32_t s_addr;
-    uint32_t d_addr;
+    in_addr_t s_addr;
+    in_addr_t d_addr;
     uint32_t nexthop;
     uint16_t i_ifc;
     uint16_t o_ifc;
@@ -51,7 +52,7 @@ struct netflow5_record
     uint16_t s_port;
     uint16_t d_port;
     uint8_t reserved;
-    uint8_t tcp_flags;
+    bool tcp_flags;
     uint8_t protocol;
     uint8_t tos;
     uint16_t s_as;
@@ -60,27 +61,25 @@ struct netflow5_record
     uint8_t d_mask;
     uint16_t padding;
 } __attribute__((packed));
-// struct Netflow_row
-// {
-//     Packet packet;
-//     uint16_t flags;
-//     uint32_t number_of_packets;
-//     uint32_t number_of_bytes;
-//     // TODO: time type
-//     uint64_t first;
-//     uint64_t last;
-//     uint32_t next_hop;
-//     uint32_t input_interface;
-//     uint32_t output_interface;
-//     uint8_t srcAS;
-//     uint8_t dstAS;
-//     uint16_t active;
-//     uint16_t idle;
-//     bool tcp_flags;
-// };
+
+struct flow
+{
+    in_addr_t s_addr;
+    in_addr_t d_addr;
+    uint16_t s_port;
+    uint16_t d_port;
+    uint8_t protocol;
+    // TODO:
+    timeval Last;
+    uint32_t dOctets;
+    uint32_t dPkts;
+    uint8_t tos;
+    bool tcp_flags;
+};
 
 // src and dst addresses, protocol, ports, tos
-typedef tuple<int, int, int, int, int, int> tuple_key;
+typedef tuple<in_addr_t, in_addr_t, int, int, int, int>
+    tuple_key;
 // https://stackoverflow.com/questions/11408934/using-a-stdtuple-as-key-for-stdunordered-map
 struct key_hash : public unary_function<tuple_key, size_t>
 {
@@ -104,7 +103,7 @@ struct key_equal : public binary_function<tuple_key, tuple_key, bool>
     }
 };
 
-typedef unordered_map<tuple_key, netflow5_record, key_hash, key_equal> map_t;
+typedef unordered_map<tuple_key, flow, key_hash, key_equal> map_t;
 int check_number(char *number)
 {
     char *fail_ptr = NULL;
@@ -125,7 +124,7 @@ int check_number(char *number)
     return num;
 }
 
-tuple<uint32_t, uint32_t, int, int, int, int> ipv4_packet(const u_char *packet, int total_length)
+tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet, int total_length)
 {
     const struct ip *ip;
     ip = (struct ip *)(packet + SIZE_ETHERNET);
@@ -136,8 +135,8 @@ tuple<uint32_t, uint32_t, int, int, int, int> ipv4_packet(const u_char *packet, 
     }
     // print_ipv4(ip);
 
-    auto src_ip = ip->ip_src;
-    auto dst_ip = ip->ip_dst;
+    auto src_ip = ip->ip_src.s_addr;
+    auto dst_ip = ip->ip_dst.s_addr;
     int tos = ip->ip_tos;
     int src_port = 0;
     int dst_port = 0;
@@ -165,8 +164,8 @@ tuple<uint32_t, uint32_t, int, int, int, int> ipv4_packet(const u_char *packet, 
         src_port = htons(udp->uh_sport);
         dst_port = htons(udp->uh_dport);
     }
-    printf("here addr: %d", src_ip.s_addr);
-    return make_tuple(src_ip.s_addr, dst_ip.s_addr, protocol, src_port, dst_port, tos);
+
+    return make_tuple(src_ip, dst_ip, protocol, src_port, dst_port, tos);
 }
 int main(int argc, char *argv[])
 {
@@ -227,7 +226,7 @@ int main(int argc, char *argv[])
     struct pcap_pkthdr header;
     const uint8_t *packet;
 
-    // map_t m;
+    map_t flows;
 
     // data d;
     // d.x = "test data";
@@ -272,13 +271,13 @@ int main(int argc, char *argv[])
         int length = header.caplen;
         printf("length: %d bytes\n", length);
         printf("time: %ld\n", header.ts.tv_sec);
-        tuple<int, int, int, int, int, int> tpl;
+        tuple<in_addr_t, in_addr_t, int, int, int, int> tpl;
         if (htons(ethernet->ether_type) == IPV4_ETHER)
         {
             tpl = ipv4_packet(packet, length);
         }
 
-        netflow5_record record;
+        flow record;
         record.s_addr = get<0>(tpl);
         record.d_addr = get<1>(tpl);
         record.protocol = get<2>(tpl);
@@ -286,12 +285,29 @@ int main(int argc, char *argv[])
         record.d_port = get<4>(tpl);
         record.tos = get<5>(tpl);
         printf("record: \n");
-        printf("s_addr %d\n", get<0>(tpl));
-        printf("d_addr %d\n", get<1>(tpl));
+        cout << "src ip: " << get<0>(tpl) << '\n';
+        cout << "dst ip: " << get<1>(tpl) << '\n';
+
         printf("%d\n", record.protocol);
         printf("sport %d\n", record.s_port);
         printf("dport %d\n", record.d_port);
         printf("%d\n", record.tos);
         printf("\n\n");
+
+        auto comp_tuple = make_tuple(record.s_addr, record.d_addr,
+                                     record.protocol, record.s_port, record.d_port, record.tos);
+        auto found = flows.find(comp_tuple);
+        if (flows.end() != found)
+        {
+            flows[comp_tuple] = record;
+            cout << "found\n";
+        }
+        else
+        {
+            flows[comp_tuple].dPkts++;
+            cout << "dpkts: " << flows[comp_tuple].dPkts << '\n';
+            cout << "not found\n";
+        }
     }
+    cout << "size: " << flows.size();
 }
