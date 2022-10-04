@@ -75,6 +75,8 @@ struct flow
     uint32_t dPkts;
     uint8_t tos;
     bool tcp_flags;
+    time_t last_packet;
+    time_t first_packet;
 };
 
 // src and dst addresses, protocol, ports, tos
@@ -146,6 +148,7 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
 
     if (ip->ip_p == ICMP_PROTOCOL)
     {
+        printf("here");
         protocol = ICMP_PROTOCOL;
     }
     else if (ip->ip_p == TCP_PROTOCOL)
@@ -262,6 +265,7 @@ int main(int argc, char *argv[])
             exit(-1);
         }
     }
+    int exported_flows = 0;
     while (packet = pcap_next(handle, &header))
     {
 
@@ -270,7 +274,8 @@ int main(int argc, char *argv[])
         ethernet = (struct ether_header *)(packet);
         int length = header.caplen;
         printf("length: %d bytes\n", length);
-        printf("time: %ld\n", header.ts.tv_sec);
+        auto my_time = header.ts.tv_sec;
+        printf("time: %ld\n", my_time);
         tuple<in_addr_t, in_addr_t, int, int, int, int> tpl;
         if (htons(ethernet->ether_type) == IPV4_ETHER)
         {
@@ -284,30 +289,80 @@ int main(int argc, char *argv[])
         record.s_port = get<3>(tpl);
         record.d_port = get<4>(tpl);
         record.tos = get<5>(tpl);
-        printf("record: \n");
-        cout << "src ip: " << get<0>(tpl) << '\n';
-        cout << "dst ip: " << get<1>(tpl) << '\n';
+        // printf("record: \n");
+        // cout << "src ip: " << get<0>(tpl) << '\n';
+        // cout << "dst ip: " << get<1>(tpl) << '\n';
 
-        printf("%d\n", record.protocol);
-        printf("sport %d\n", record.s_port);
-        printf("dport %d\n", record.d_port);
-        printf("%d\n", record.tos);
-        printf("\n\n");
-
-        auto comp_tuple = make_tuple(record.s_addr, record.d_addr,
-                                     record.protocol, record.s_port, record.d_port, record.tos);
+        // printf("%d\n", record.protocol);
+        // printf("sport %d\n", record.s_port);
+        // printf("dport %d\n", record.d_port);
+        // printf("%d\n", record.tos);
+        // printf("\n\n");
+        printf("protocol: %d\n", record.protocol);
+        auto comp_tuple = make_tuple(record.s_addr, record.d_addr, record.protocol, record.s_port, record.d_port, record.tos);
         auto found = flows.find(comp_tuple);
+        cout << "=============\n";
+        printf(" %ul\n", get<0>(comp_tuple));
+        printf(" %ul\n", get<1>(comp_tuple));
+        printf(" %d\n", get<2>(comp_tuple));
+        printf(" %d\n", get<3>(comp_tuple));
+        printf(" %d\n", get<4>(comp_tuple));
+        printf(" %d\n", get<5>(comp_tuple));
+
+        cout << "Time diffs\n";
+        cout << "=================\n";
+        for (auto const flow : flows)
+        {
+
+            auto time_diff = difftime(my_time, flow.second.last_packet);
+            cout << "times: " << my_time << " " << flow.second.last_packet << "\n";
+            cout << flow.second.s_port << "\n";
+            cout << flow.second.protocol << "\n";
+            cout << time_diff << " inactive time diff\n";
+            auto to_erase = flow.second;
+            auto tuple_erase = make_tuple(to_erase.s_addr, to_erase.d_addr,
+                                          to_erase.protocol, to_erase.s_port, to_erase.d_port, to_erase.tos);
+            cout << "SIZE: "
+                 << flows.size() << "\n";
+            if (time_diff > inactive_timeout)
+            {
+                cout << "EXPORTING INACTIVE\n\n";
+
+                flows.erase(tuple_erase);
+                continue;
+            }
+
+            time_diff = difftime(my_time, flow.second.first_packet);
+            cout << time_diff << " active time diff\n";
+            if (time_diff > active_timeout)
+            {
+                cout << "EXPORTING ACTIVE\n\n";
+                flows.erase(tuple_erase);
+
+                continue;
+            }
+        }
+        cout << "=================\n";
+
         if (flows.end() != found)
         {
-            flows[comp_tuple] = record;
-            cout << "found\n";
+
+            flows[comp_tuple].dPkts++;
+            flows[comp_tuple].last_packet = header.ts.tv_sec;
+            cout << "dpkts: " << flows[comp_tuple].dPkts << '\n';
+            cout << flows[comp_tuple].last_packet << "last packet\n";
+            cout << "added\n";
         }
         else
         {
-            flows[comp_tuple].dPkts++;
-            cout << "dpkts: " << flows[comp_tuple].dPkts << '\n';
-            cout << "not found\n";
+            flows[comp_tuple] = record;
+            flows[comp_tuple].first_packet = header.ts.tv_sec;
+            flows[comp_tuple].last_packet = header.ts.tv_sec;
+            cout << flows[comp_tuple].first_packet << "first packet\n";
+            cout << flows[comp_tuple].last_packet << "last packet\n";
+            cout << "created\n";
         }
+        cout << "=============\n";
     }
     cout << "size: " << flows.size();
 }
