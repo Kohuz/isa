@@ -15,6 +15,8 @@
 #include <iostream>
 #include <tuple>
 #include <unordered_map>
+#include <vector>
+#include <sstream>
 
 using namespace std;
 
@@ -24,44 +26,52 @@ using namespace std;
 #define UDP_PROTOCOL 17
 #define IPV4_ETHER 2048
 #define ARP_ETHER 2054
+#define NF_VERSION 5
 
-typedef struct Packet Packet;
-struct Packet
+typedef struct netflow5_header netflow5_header;
+typedef struct netflow5_record netflow5_record;
+struct netflow5_header
 {
-    uint32_t src_ip;
-    uint32_t dst_ip;
-    uint32_t src_mask;
-    uint32_t dst_mask;
-    uint32_t src_port;
-    uint32_t dst_port;
-    uint8_t *protocol;
-    uint16_t ToS;
+    uint8_t version;
+    uint16_t count;
+    uint32_t SysUptim;
+    uint32_t unix_secs;
+    uint32_t unix_nsecs;
+    uint32_t flow_sequence;
+    uint8_t engine_type;
+    uint8_t engine_id;
+    uint16_t sampling_interval;
 };
 // https://github.com/aabc/ipt-netflow/blob/master/ipt_NETFLOW.h
 struct netflow5_record
 {
-    in_addr_t s_addr;
-    in_addr_t d_addr;
+    uint32_t srcaddr;
+    uint32_t dstaddr;
     uint32_t nexthop;
-    uint16_t i_ifc;
-    uint16_t o_ifc;
-    uint32_t nr_packets;
-    uint32_t nr_octets;
-    uint32_t first_ms;
-    uint32_t last_ms;
-    uint16_t s_port;
-    uint16_t d_port;
-    uint8_t reserved;
-    bool tcp_flags;
-    uint8_t protocol;
+    uint16_t input;
+    uint16_t output;
+    uint32_t dPkts;
+    uint32_t dOctects;
+    uint32_t First;
+    uint32_t Last;
+    uint16_t srcport;
+    uint16_t dstport;
+    uint8_t pad1;
+    uint8_t tcp_flags;
+    uint8_t prot;
     uint8_t tos;
-    uint16_t s_as;
-    uint16_t d_as;
-    uint8_t s_mask;
-    uint8_t d_mask;
-    uint16_t padding;
-} __attribute__((packed));
+    uint16_t src_as;
+    uint16_t dst_as;
+    uint8_t src_mask;
+    uint8_t dst_mask;
+    uint16_t pad2;
+};
 
+struct packet
+{
+    netflow5_header header;
+    netflow5_record payload;
+};
 struct flow
 {
     in_addr_t s_addr;
@@ -69,8 +79,6 @@ struct flow
     uint16_t s_port;
     uint16_t d_port;
     uint8_t protocol;
-    // TODO:
-    timeval Last;
     uint32_t dOctets;
     uint32_t dPkts;
     uint8_t tos;
@@ -126,6 +134,68 @@ int check_number(char *number)
     return num;
 }
 
+void print_flows(map_t flows)
+{
+    for (auto const flow : flows)
+    {
+        cout << "Src IP " << flow.second.s_addr << "\n";
+        cout << "Dst IP " << flow.second.d_addr << "\n";
+        cout << "Src Port " << flow.second.s_port << "\n";
+        cout << "Dst Port " << flow.second.d_port << "\n";
+        printf("tos %d \n", flow.second.tos);
+        cout << "dPakets " << flow.second.dPkts << "\n";
+        printf("protocol %d \n", flow.second.protocol);
+        cout << "dOctets " << flow.second.dOctets << "\n";
+        cout << "========================\n";
+    }
+}
+
+packet assemble_packet(flow flow_record)
+{
+}
+// from isa prednaska
+void export_packet(flow flow, string collector_ip, string port)
+{
+    // TODO: check port is a number
+    int sock;
+    struct sockaddr_in server, from;
+    struct hostent *servent;
+    int len = collector_ip.length();
+
+    // declaring character array
+    char collector[len + 1];
+
+    // copying the contents of the
+    // string to char array
+    strcpy(collector, collector_ip.c_str());
+    if ((servent = gethostbyname(collector)) == NULL)
+    { // check the first parameter
+        cerr << collector << "\n";
+        cerr << "gethostbyname() failed\n";
+        exit(1);
+    }
+
+    // copy the first parameter to the server.sin_addr structure
+    memcpy(&server.sin_addr, servent->h_addr, servent->h_length);
+
+    server.sin_port = htons(stoi(port)); // server port (network byte order)
+
+    if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+    { // create a client socket
+        cerr << "gethostbyname() failed\n";
+        exit(1);
+    }
+
+    printf("* Server socket created\n");
+
+    // assemble_packet()
+    //  if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == -1)
+    //  {
+    //      cerr << (1, "connect() failed");
+    //      exit(1);
+    //  }
+}
+
 tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet, int total_length)
 {
     const struct ip *ip;
@@ -140,15 +210,14 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
     auto src_ip = ip->ip_src.s_addr;
     auto dst_ip = ip->ip_dst.s_addr;
     int tos = ip->ip_tos;
-    int src_port = 0;
-    int dst_port = 0;
-    int protocol = 0;
+    uint16_t src_port = 0;
+    uint16_t dst_port = 0;
+    uint8_t protocol = 0;
 
     int size_ip = ip->ip_hl * 4;
 
     if (ip->ip_p == ICMP_PROTOCOL)
     {
-        printf("here");
         protocol = ICMP_PROTOCOL;
     }
     else if (ip->ip_p == TCP_PROTOCOL)
@@ -156,19 +225,19 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
         const struct tcphdr *tcp; /* The TCP header */
         tcp = (struct tcphdr *)(packet + SIZE_ETHERNET + size_ip);
         protocol = TCP_PROTOCOL;
-        src_port = htons(tcp->th_sport);
-        dst_port = htons(tcp->th_dport);
+        src_port = ntohs(tcp->th_sport);
+        dst_port = ntohs(tcp->th_dport);
     }
     else if (ip->ip_p == UDP_PROTOCOL)
     {
         const struct udphdr *udp; /* The TCP header */
         udp = (struct udphdr *)(packet + SIZE_ETHERNET + size_ip);
         protocol = UDP_PROTOCOL;
-        src_port = htons(udp->uh_sport);
-        dst_port = htons(udp->uh_dport);
+        src_port = ntohs(udp->uh_sport);
+        dst_port = ntohs(udp->uh_dport);
     }
 
-    return make_tuple(src_ip, dst_ip, protocol, src_port, dst_port, tos);
+    return make_tuple(ntohl(src_ip), ntohl(dst_ip), protocol, src_port, dst_port, tos);
 }
 int main(int argc, char *argv[])
 {
@@ -224,26 +293,23 @@ int main(int argc, char *argv[])
         }
     }
 
-    pcap_t *handle;
+    vector<string> split_ip;
+    string segment;
+    stringstream strstream(collector_ip);
+    // TODO: HANDLE BAD INPUT
+    while (getline(strstream, segment, ':'))
+    {
+        split_ip.push_back(segment);
+    }
+    string coll_ip = split_ip[0];
+    string port = split_ip[1];
+    pcap_t *
+        handle;
     char errbuf[PCAP_ERRBUF_SIZE];
     struct pcap_pkthdr header;
     const uint8_t *packet;
 
     map_t flows;
-
-    // data d;
-    // d.x = "test data";
-    // m[make_tuple("d", "df", 2, 3, 4, 8)] = d;
-
-    // auto itr = m.find(make_tuple("d", "df", 2, 3, 4, 9));
-    // if (m.end() != itr)
-    // {
-    //     cout << "x: " << itr->second.x;
-    // }
-    // else
-    // {
-    //     cout << "not found";
-    // }
 
     if (!file)
     {
@@ -276,12 +342,14 @@ int main(int argc, char *argv[])
         printf("length: %d bytes\n", length);
         auto my_time = header.ts.tv_sec;
         printf("time: %ld\n", my_time);
+
         tuple<in_addr_t, in_addr_t, int, int, int, int> tpl;
         if (htons(ethernet->ether_type) == IPV4_ETHER)
         {
             tpl = ipv4_packet(packet, length);
         }
 
+        // Create flow record
         flow record;
         record.s_addr = get<0>(tpl);
         record.d_addr = get<1>(tpl);
@@ -289,68 +357,51 @@ int main(int argc, char *argv[])
         record.s_port = get<3>(tpl);
         record.d_port = get<4>(tpl);
         record.tos = get<5>(tpl);
-        // printf("record: \n");
-        // cout << "src ip: " << get<0>(tpl) << '\n';
-        // cout << "dst ip: " << get<1>(tpl) << '\n';
 
-        // printf("%d\n", record.protocol);
-        // printf("sport %d\n", record.s_port);
-        // printf("dport %d\n", record.d_port);
-        // printf("%d\n", record.tos);
-        // printf("\n\n");
-        printf("protocol: %d\n", record.protocol);
+        // Try to find it in captured flows
         auto comp_tuple = make_tuple(record.s_addr, record.d_addr, record.protocol, record.s_port, record.d_port, record.tos);
         auto found = flows.find(comp_tuple);
-        cout << "=============\n";
-        printf(" %ul\n", get<0>(comp_tuple));
-        printf(" %ul\n", get<1>(comp_tuple));
-        printf(" %d\n", get<2>(comp_tuple));
-        printf(" %d\n", get<3>(comp_tuple));
-        printf(" %d\n", get<4>(comp_tuple));
-        printf(" %d\n", get<5>(comp_tuple));
 
-        cout << "Time diffs\n";
-        cout << "=================\n";
         for (auto const flow : flows)
         {
+            printf("exported flows: %d\n\n", exported_flows);
 
             auto time_diff = difftime(my_time, flow.second.last_packet);
-            cout << "times: " << my_time << " " << flow.second.last_packet << "\n";
-            cout << flow.second.s_port << "\n";
-            cout << flow.second.protocol << "\n";
-            cout << time_diff << " inactive time diff\n";
+
             auto to_erase = flow.second;
             auto tuple_erase = make_tuple(to_erase.s_addr, to_erase.d_addr,
                                           to_erase.protocol, to_erase.s_port, to_erase.d_port, to_erase.tos);
             cout << "SIZE: "
                  << flows.size() << "\n";
+
             if (time_diff > inactive_timeout)
             {
                 cout << "EXPORTING INACTIVE\n\n";
-
+                export_packet(flows[tuple_erase], coll_ip, port);
                 flows.erase(tuple_erase);
+                exported_flows++;
                 continue;
             }
 
             time_diff = difftime(my_time, flow.second.first_packet);
-            cout << time_diff << " active time diff\n";
             if (time_diff > active_timeout)
             {
                 cout << "EXPORTING ACTIVE\n\n";
+                export_packet(flows[tuple_erase], coll_ip, port);
                 flows.erase(tuple_erase);
+                exported_flows++;
 
                 continue;
             }
         }
-        cout << "=================\n";
 
         if (flows.end() != found)
         {
 
             flows[comp_tuple].dPkts++;
+            flows[comp_tuple].dOctets += header.caplen;
             flows[comp_tuple].last_packet = header.ts.tv_sec;
-            cout << "dpkts: " << flows[comp_tuple].dPkts << '\n';
-            cout << flows[comp_tuple].last_packet << "last packet\n";
+
             cout << "added\n";
         }
         else
@@ -358,11 +409,12 @@ int main(int argc, char *argv[])
             flows[comp_tuple] = record;
             flows[comp_tuple].first_packet = header.ts.tv_sec;
             flows[comp_tuple].last_packet = header.ts.tv_sec;
-            cout << flows[comp_tuple].first_packet << "first packet\n";
-            cout << flows[comp_tuple].last_packet << "last packet\n";
+            flows[comp_tuple].dPkts = 1;
+            flows[comp_tuple].dOctets = header.caplen;
+
             cout << "created\n";
         }
-        cout << "=============\n";
     }
+    // print_flows(flows);
     cout << "size: " << flows.size();
 }
