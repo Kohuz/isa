@@ -159,11 +159,11 @@ packet assemble_packet(flow flow_record, int sequence)
     header.flow_sequence = sequence;
     header.unix_nsecs = 0;
     header.unix_secs = 0;
-    header.engine_id =0;
+    header.engine_id = 0;
     header.engine_type = 0;
     header.sampling_interval = 0;
 
-    netflow5_record  record;
+    netflow5_record record;
     record.srcaddr = flow_record.s_addr;
     record.dstaddr = flow_record.d_addr;
     record.nexthop = 0;
@@ -189,7 +189,6 @@ packet assemble_packet(flow flow_record, int sequence)
     pkt.payload = record;
 
     return pkt;
-
 }
 // from isa prednaska
 void export_packet(flow flow, string collector_ip, string port)
@@ -199,7 +198,7 @@ void export_packet(flow flow, string collector_ip, string port)
     struct sockaddr_in server, from;
     struct hostent *servent;
     int len = collector_ip.length();
-     char buffer[1024];  
+    char buffer[1024];
 
     // declaring character array
     char collector[len + 1];
@@ -213,24 +212,31 @@ void export_packet(flow flow, string collector_ip, string port)
         cerr << "gethostbyname() failed\n";
         exit(1);
     }
-    
+    server.sin_family = AF_INET;
 
     // copy the first parameter to the server.sin_addr structure
     memcpy(&server.sin_addr, servent->h_addr, servent->h_length);
 
-    server.sin_port = htons(stoi(port)); // server port (network byte order)
+    // TODO: check number
 
+    server.sin_port = htons(stoi(port)); // server port (network byte order)
 
     if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
     { // create a client socket
         cerr << "gethostbyname() failed\n";
         exit(1);
     }
-    
-//TODO: sequence number
+    if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == -1)
+    {
+        cerr << "connect failed\n";
+        printf("eerno: %s\n", strerror(errno));
+    }
+    exit(1);
+
+    // TODO: sequence number
     packet pkt = assemble_packet(flow, 1);
     printf("* Server socket created\n");
-    int i = sendto(sock,&pkt,sizeof(pkt),0,(struct sockaddr *) &server, len); 
+    int i = sendto(sock, &pkt, sizeof(pkt), 0, (struct sockaddr *)&server, len);
     printf("ret value: %d\n", i);
     printf("eerno: %s\n", strerror(errno));
 
