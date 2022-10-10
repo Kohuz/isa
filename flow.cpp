@@ -12,6 +12,7 @@
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
 #include <time.h>
+#include <errno.h>
 #include <iostream>
 #include <tuple>
 #include <unordered_map>
@@ -150,8 +151,45 @@ void print_flows(map_t flows)
     }
 }
 
-packet assemble_packet(flow flow_record)
+packet assemble_packet(flow flow_record, int sequence)
 {
+    netflow5_header header;
+    header.version = 5;
+    header.count = 1;
+    header.flow_sequence = sequence;
+    header.unix_nsecs = 0;
+    header.unix_secs = 0;
+    header.engine_id =0;
+    header.engine_type = 0;
+    header.sampling_interval = 0;
+
+    netflow5_record  record;
+    record.srcaddr = flow_record.s_addr;
+    record.dstaddr = flow_record.d_addr;
+    record.nexthop = 0;
+    record.input = 0;
+    record.output = 0;
+    record.dPkts = flow_record.dPkts;
+    record.dOctects = flow_record.dOctets;
+    record.First = flow_record.first_packet;
+    record.srcport = flow_record.s_port;
+    record.dstport = flow_record.d_port;
+    record.pad1 = 0;
+    record.tcp_flags = 1;
+    record.prot = flow_record.protocol;
+    record.tos = flow_record.tos;
+    record.src_as = 0;
+    record.dst_as = 0;
+    record.src_mask = 0;
+    record.dst_mask = 0;
+    record.pad2 = 0;
+
+    packet pkt;
+    pkt.header = header;
+    pkt.payload = record;
+
+    return pkt;
+
 }
 // from isa prednaska
 void export_packet(flow flow, string collector_ip, string port)
@@ -161,6 +199,7 @@ void export_packet(flow flow, string collector_ip, string port)
     struct sockaddr_in server, from;
     struct hostent *servent;
     int len = collector_ip.length();
+     char buffer[1024];  
 
     // declaring character array
     char collector[len + 1];
@@ -174,19 +213,26 @@ void export_packet(flow flow, string collector_ip, string port)
         cerr << "gethostbyname() failed\n";
         exit(1);
     }
+    
 
     // copy the first parameter to the server.sin_addr structure
     memcpy(&server.sin_addr, servent->h_addr, servent->h_length);
 
     server.sin_port = htons(stoi(port)); // server port (network byte order)
 
+
     if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
     { // create a client socket
         cerr << "gethostbyname() failed\n";
         exit(1);
     }
-
+    
+//TODO: sequence number
+    packet pkt = assemble_packet(flow, 1);
     printf("* Server socket created\n");
+    int i = sendto(sock,&pkt,sizeof(pkt),0,(struct sockaddr *) &server, len); 
+    printf("ret value: %d\n", i);
+    printf("eerno: %s\n", strerror(errno));
 
     // assemble_packet()
     //  if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == -1)
