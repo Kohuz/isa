@@ -83,6 +83,7 @@ struct flow
     uint32_t dOctets;
     uint32_t dPkts;
     uint8_t tos;
+    uint64_t time_sec;
     bool tcp_flags;
     time_t last_packet;
     time_t first_packet;
@@ -90,7 +91,7 @@ struct flow
 
 // src and dst addresses, protocol, ports, tos
 typedef tuple<in_addr_t, in_addr_t, int, int, int, int>
-        tuple_key;
+    tuple_key;
 // https://stackoverflow.com/questions/11408934/using-a-stdtuple-as-key-for-stdunordered-map
 struct key_hash : public unary_function<tuple_key, size_t>
 {
@@ -105,12 +106,12 @@ struct key_equal : public binary_function<tuple_key, tuple_key, bool>
     bool operator()(const tuple_key &v0, const tuple_key &v1) const
     {
         return (
-                get<0>(v0) == get<0>(v1) &&
-                get<1>(v0) == get<1>(v1) &&
-                get<2>(v0) == get<2>(v1) &&
-                get<3>(v0) == get<3>(v1) &&
-                get<4>(v0) == get<4>(v1) &&
-                get<5>(v0) == get<5>(v1));
+            get<0>(v0) == get<0>(v1) &&
+            get<1>(v0) == get<1>(v1) &&
+            get<2>(v0) == get<2>(v1) &&
+            get<3>(v0) == get<3>(v1) &&
+            get<4>(v0) == get<4>(v1) &&
+            get<5>(v0) == get<5>(v1));
     }
 };
 
@@ -155,16 +156,17 @@ packet assemble_packet(flow flow_record, int sequence)
 {
     netflow5_header header;
     header.version = 5;
-    header.count = 1;
-    header.flow_sequence = sequence;
+    header.count = htons(1);
+    header.flow_sequence = htonl(sequence);
     header.unix_nsecs = 0;
     header.unix_secs = 0;
-    header.engine_id =0;
+    header.SysUptim = flow_record.time_sec;
+    header.engine_id = 0;
     header.engine_type = 0;
-    header.sampling_interval = 0;
+    header.sampling_interval = htons(0);
 
-    netflow5_record  record;
-    record.srcaddr = flow_record.s_addr;
+    netflow5_record record;
+    record.srcaddr = htonl(flow_record.s_addr);
     record.dstaddr = flow_record.d_addr;
     record.nexthop = 0;
     record.input = 0;
@@ -189,7 +191,6 @@ packet assemble_packet(flow flow_record, int sequence)
     pkt.payload = record;
 
     return pkt;
-
 }
 // from isa prednaska
 void export_packet(flow flow, string collector_ip, string port)
@@ -214,7 +215,6 @@ void export_packet(flow flow, string collector_ip, string port)
         exit(1);
     }
 
-
     // copy the first parameter to the server.sin_addr structure
     memcpy(&server.sin_addr, servent->h_addr, servent->h_length);
 
@@ -227,16 +227,20 @@ void export_packet(flow flow, string collector_ip, string port)
         exit(1);
     }
 
-//TODO: sequence number
+    // TODO: sequence number
     packet pkt = assemble_packet(flow, 1);
 
-    if (connect(sock, (struct sockaddr *)&server, sizeof(server))  == -1){
+    if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == -1)
+    {
         printf("eerno: %s\n", strerror(errno));
         exit(1);
-            }
+    }
     printf("* Server socket created\n");
-    int i = send(sock,&pkt,sizeof(pkt),0);
-    if(i == -1) {
+
+    pkt.header.unix_secs = time(NULL);
+    int i = send(sock, &pkt, sizeof(pkt), 0);
+    if (i == -1)
+    {
         printf("ret value: %d\n", i);
         printf("eerno: %s\n", strerror(errno));
         exit(1);
@@ -325,25 +329,25 @@ int main(int argc, char *argv[])
         switch (option)
         {
 
-            case 'f':
-                file = optarg;
-                break;
-            case 'c':
-                collector_ip = optarg;
-                break;
-            case 'a':
-                active_timeout = check_number(optarg);
-                break;
-            case 'i':
-                inactive_timeout = check_number(optarg);
-                break;
-            case 'm':
-                limit = check_number(optarg);
-                break;
+        case 'f':
+            file = optarg;
+            break;
+        case 'c':
+            collector_ip = optarg;
+            break;
+        case 'a':
+            active_timeout = check_number(optarg);
+            break;
+        case 'i':
+            inactive_timeout = check_number(optarg);
+            break;
+        case 'm':
+            limit = check_number(optarg);
+            break;
 
-            default:
-                cout << usage;
-                exit(EXIT_FAILURE);
+        default:
+            cout << usage;
+            exit(EXIT_FAILURE);
         }
     }
 
@@ -358,7 +362,7 @@ int main(int argc, char *argv[])
     string coll_ip = split_ip[0];
     string port = split_ip[1];
     pcap_t *
-            handle;
+        handle;
     char errbuf[PCAP_ERRBUF_SIZE];
     struct pcap_pkthdr header;
     const uint8_t *packet;
@@ -386,8 +390,15 @@ int main(int argc, char *argv[])
         }
     }
     int exported_flows = 0;
+    time_t start_time;
+    int i = 0;
     while (packet = pcap_next(handle, &header))
     {
+        if (i == 0)
+        {
+            start_time = header.ts.tv_sec;
+            i++;
+        }
 
         printf("got one packet\n");
         const struct ether_header *ethernet; /* The ethernet header */
@@ -416,7 +427,7 @@ int main(int argc, char *argv[])
         auto comp_tuple = make_tuple(record.s_addr, record.d_addr, record.protocol, record.s_port, record.d_port, record.tos);
         auto found = flows.find(comp_tuple);
 
-        vector<tuple<in_addr_t, in_addr_t, int, int, int, int> > to_delete;
+        vector<tuple<in_addr_t, in_addr_t, int, int, int, int>> to_delete;
         for (auto flow = flows.begin(); flow != flows.end(); flow++)
         {
             printf("exported flows: %d\n\n", exported_flows);
@@ -449,7 +460,8 @@ int main(int argc, char *argv[])
                 continue;
             }
         }
-        for (auto const& item: to_delete){
+        for (auto const &item : to_delete)
+        {
             flows.erase(item);
         }
 
@@ -459,6 +471,7 @@ int main(int argc, char *argv[])
             flows[comp_tuple].dPkts++;
             flows[comp_tuple].dOctets += header.caplen;
             flows[comp_tuple].last_packet = header.ts.tv_sec;
+            flows[comp_tuple].time_sec = difftime(my_time, start_time);
 
             cout << "added\n";
         }
@@ -468,6 +481,7 @@ int main(int argc, char *argv[])
             flows[comp_tuple].first_packet = header.ts.tv_sec;
             flows[comp_tuple].last_packet = header.ts.tv_sec;
             flows[comp_tuple].dPkts = 1;
+            flows[comp_tuple].time_sec = difftime(my_time, start_time);
             flows[comp_tuple].dOctets = header.caplen;
 
             cout << "created\n";
