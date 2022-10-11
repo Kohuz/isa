@@ -90,7 +90,7 @@ struct flow
 
 // src and dst addresses, protocol, ports, tos
 typedef tuple<in_addr_t, in_addr_t, int, int, int, int>
-    tuple_key;
+        tuple_key;
 // https://stackoverflow.com/questions/11408934/using-a-stdtuple-as-key-for-stdunordered-map
 struct key_hash : public unary_function<tuple_key, size_t>
 {
@@ -105,12 +105,12 @@ struct key_equal : public binary_function<tuple_key, tuple_key, bool>
     bool operator()(const tuple_key &v0, const tuple_key &v1) const
     {
         return (
-            get<0>(v0) == get<0>(v1) &&
-            get<1>(v0) == get<1>(v1) &&
-            get<2>(v0) == get<2>(v1) &&
-            get<3>(v0) == get<3>(v1) &&
-            get<4>(v0) == get<4>(v1) &&
-            get<5>(v0) == get<5>(v1));
+                get<0>(v0) == get<0>(v1) &&
+                get<1>(v0) == get<1>(v1) &&
+                get<2>(v0) == get<2>(v1) &&
+                get<3>(v0) == get<3>(v1) &&
+                get<4>(v0) == get<4>(v1) &&
+                get<5>(v0) == get<5>(v1));
     }
 };
 
@@ -159,11 +159,11 @@ packet assemble_packet(flow flow_record, int sequence)
     header.flow_sequence = sequence;
     header.unix_nsecs = 0;
     header.unix_secs = 0;
-    header.engine_id = 0;
+    header.engine_id =0;
     header.engine_type = 0;
     header.sampling_interval = 0;
 
-    netflow5_record record;
+    netflow5_record  record;
     record.srcaddr = flow_record.s_addr;
     record.dstaddr = flow_record.d_addr;
     record.nexthop = 0;
@@ -189,6 +189,7 @@ packet assemble_packet(flow flow_record, int sequence)
     pkt.payload = record;
 
     return pkt;
+
 }
 // from isa prednaska
 void export_packet(flow flow, string collector_ip, string port)
@@ -212,33 +213,34 @@ void export_packet(flow flow, string collector_ip, string port)
         cerr << "gethostbyname() failed\n";
         exit(1);
     }
-    server.sin_family = AF_INET;
+
 
     // copy the first parameter to the server.sin_addr structure
     memcpy(&server.sin_addr, servent->h_addr, servent->h_length);
 
-    // TODO: check number
-
     server.sin_port = htons(stoi(port)); // server port (network byte order)
+    server.sin_family = AF_INET;
 
     if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
     { // create a client socket
         cerr << "gethostbyname() failed\n";
         exit(1);
     }
-    if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == -1)
-    {
-        cerr << "connect failed\n";
-        printf("eerno: %s\n", strerror(errno));
-    }
-    exit(1);
 
-    // TODO: sequence number
+//TODO: sequence number
     packet pkt = assemble_packet(flow, 1);
+
+    if (connect(sock, (struct sockaddr *)&server, sizeof(server))  == -1){
+        printf("eerno: %s\n", strerror(errno));
+        exit(1);
+            }
     printf("* Server socket created\n");
-    int i = sendto(sock, &pkt, sizeof(pkt), 0, (struct sockaddr *)&server, len);
-    printf("ret value: %d\n", i);
-    printf("eerno: %s\n", strerror(errno));
+    int i = send(sock,&pkt,sizeof(pkt),0);
+    if(i == -1) {
+        printf("ret value: %d\n", i);
+        printf("eerno: %s\n", strerror(errno));
+        exit(1);
+    }
 
     // assemble_packet()
     //  if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == -1)
@@ -323,25 +325,25 @@ int main(int argc, char *argv[])
         switch (option)
         {
 
-        case 'f':
-            file = optarg;
-            break;
-        case 'c':
-            collector_ip = optarg;
-            break;
-        case 'a':
-            active_timeout = check_number(optarg);
-            break;
-        case 'i':
-            inactive_timeout = check_number(optarg);
-            break;
-        case 'm':
-            limit = check_number(optarg);
-            break;
+            case 'f':
+                file = optarg;
+                break;
+            case 'c':
+                collector_ip = optarg;
+                break;
+            case 'a':
+                active_timeout = check_number(optarg);
+                break;
+            case 'i':
+                inactive_timeout = check_number(optarg);
+                break;
+            case 'm':
+                limit = check_number(optarg);
+                break;
 
-        default:
-            cout << usage;
-            exit(EXIT_FAILURE);
+            default:
+                cout << usage;
+                exit(EXIT_FAILURE);
         }
     }
 
@@ -356,7 +358,7 @@ int main(int argc, char *argv[])
     string coll_ip = split_ip[0];
     string port = split_ip[1];
     pcap_t *
-        handle;
+            handle;
     char errbuf[PCAP_ERRBUF_SIZE];
     struct pcap_pkthdr header;
     const uint8_t *packet;
@@ -414,13 +416,14 @@ int main(int argc, char *argv[])
         auto comp_tuple = make_tuple(record.s_addr, record.d_addr, record.protocol, record.s_port, record.d_port, record.tos);
         auto found = flows.find(comp_tuple);
 
-        for (auto const flow : flows)
+        vector<tuple<in_addr_t, in_addr_t, int, int, int, int> > to_delete;
+        for (auto flow = flows.begin(); flow != flows.end(); flow++)
         {
             printf("exported flows: %d\n\n", exported_flows);
 
-            auto time_diff = difftime(my_time, flow.second.last_packet);
+            auto time_diff = difftime(my_time, flow->second.last_packet);
 
-            auto to_erase = flow.second;
+            auto to_erase = flow->second;
             auto tuple_erase = make_tuple(to_erase.s_addr, to_erase.d_addr,
                                           to_erase.protocol, to_erase.s_port, to_erase.d_port, to_erase.tos);
             cout << "SIZE: "
@@ -430,21 +433,24 @@ int main(int argc, char *argv[])
             {
                 cout << "EXPORTING INACTIVE\n\n";
                 export_packet(flows[tuple_erase], coll_ip, port);
-                flows.erase(tuple_erase);
+                to_delete.push_back(tuple_erase);
                 exported_flows++;
                 continue;
             }
 
-            time_diff = difftime(my_time, flow.second.first_packet);
+            time_diff = difftime(my_time, flow->second.first_packet);
             if (time_diff > active_timeout)
             {
                 cout << "EXPORTING ACTIVE\n\n";
                 export_packet(flows[tuple_erase], coll_ip, port);
-                flows.erase(tuple_erase);
+                to_delete.push_back(tuple_erase);
                 exported_flows++;
 
                 continue;
             }
+        }
+        for (auto const& item: to_delete){
+            flows.erase(item);
         }
 
         if (flows.end() != found)
