@@ -8,7 +8,7 @@ struct netflow5_header
 {
     uint16_t version;
     uint16_t count;
-    uint32_t SysUptim;
+    uint32_t SysUptime;
     uint32_t unix_secs;
     uint32_t unix_nsecs;
     uint32_t flow_sequence;

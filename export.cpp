@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string>
 #include <tuple>
+#include <chrono>
 
 #include "map_struct.h"
 #include "structures.h"
@@ -14,6 +15,7 @@
 #include "export.h"
 
 using namespace std;
+using namespace std::chrono;
 // from isa prednaska
 void export_packet(flow flow, string collector_ip, string port, int sequence)
 {
@@ -57,9 +59,9 @@ void export_packet(flow flow, string collector_ip, string port, int sequence)
         printf("eerno: %s\n", strerror(errno));
         exit(1);
     }
-    printf("* Server socket created\n");
 
-    pkt.header.unix_secs = time(NULL);
+    pkt.header.unix_secs = ntohl(time(NULL));
+    pkt.header.unix_nsecs = ntohl(time_point_cast<nanoseconds>(system_clock::now()).time_since_epoch().count());
     int i = send(sock, &pkt, sizeof(pkt), 0);
     if (i == -1)
     {

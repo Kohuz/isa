@@ -118,8 +118,7 @@ int main(int argc, char *argv[])
     }
     string coll_ip = split_ip[0];
     string port = split_ip[1];
-    pcap_t *
-        handle;
+    pcap_t *handle;
     char errbuf[PCAP_ERRBUF_SIZE];
     struct pcap_pkthdr header;
     const uint8_t *packet;
@@ -161,6 +160,7 @@ int main(int argc, char *argv[])
         const struct ether_header *ethernet; /* The ethernet header */
         ethernet = (struct ether_header *)(packet);
         int length = header.caplen;
+        int fin = 0;
         auto my_time = header.ts.tv_sec;
 
         tuple<in_addr_t, in_addr_t, int, int, int, int> tpl;
@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
 
         if (htons(ethernet->ether_type) == IPV4_ETHER)
         {
-            tpl = ipv4_packet(packet, &length);
+            tpl = ipv4_packet(packet, &length, &fin);
         }
 
         // Create flow record
@@ -180,6 +180,8 @@ int main(int argc, char *argv[])
         record.s_port = get<3>(tpl);
         record.d_port = get<4>(tpl);
         record.tos = get<5>(tpl);
+        record.tcp_flags = fin;
+        fin = 0;
 
         // Try to find it in captured flows
         auto comp_tuple = make_tuple(record.s_addr, record.d_addr, record.protocol, record.s_port, record.d_port, record.tos);
@@ -198,6 +200,13 @@ int main(int argc, char *argv[])
             cout << "SIZE: "
                  << flows.size() << "\n";
 
+            if(flows[tuple_erase].tcp_flags == 1){
+                cout << "EXPORTING fin\n\n";
+                export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
+                to_delete.push_back(tuple_erase);
+                exported_flows++;
+                continue;
+            }
             if (time_diff > inactive_timeout)
             {
                 cout << "EXPORTING INACTIVE\n\n";
@@ -229,7 +238,6 @@ int main(int argc, char *argv[])
             flows[comp_tuple].dPkts++;
             flows[comp_tuple].dOctets +=  header.caplen-14;
             flows[comp_tuple].last_packet = header.ts.tv_sec;
-            flows[comp_tuple].time_sec = difftime(my_time, start_time);
 
             cout << "added\n";
         }

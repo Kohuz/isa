@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
@@ -21,7 +20,7 @@
 #define TCP_PROTOCOL 6
 #define UDP_PROTOCOL 17
 
-tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet, int *length)
+tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet, int *length, int* fin)
 {
     const struct ip *ip;
     ip = (struct ip *)(packet + SIZE_ETHERNET);
@@ -49,6 +48,20 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
     {
         const struct tcphdr *tcp; /* The TCP header */
         tcp = (struct tcphdr *)(packet + SIZE_ETHERNET + size_ip);
+        if (tcp->th_flags & TH_FIN){
+            *fin = 1;
+        }
+//        if (tcp->th_flags & TH_ACK){
+//            printf("   Flag: TH_ACK");
+//        }if (tcp->th_flags & TH_URG){
+//            printf("   Flag: TH_URG");
+//        }if (tcp->th_flags & TH_RST){
+//            printf("   Flag: TH_RST");
+//        }
+//        if (tcp->th_flags & TH_SYN){
+//            printf("   Flag: TH_SYN");
+//        }
+
         protocol = TCP_PROTOCOL;
         src_port = ntohs(tcp->th_sport);
         dst_port = ntohs(tcp->th_dport);
@@ -71,9 +84,7 @@ packet assemble_packet(flow flow_record, int sequence)
     header.version = htons(NF_VERSION);
     header.count = htons(1);
     header.flow_sequence = htonl(sequence);
-    header.unix_nsecs = 0;
-    header.unix_secs = 0;
-    header.SysUptim = flow_record.time_sec;
+    header.SysUptime = htonl(flow_record.time_sec);
     header.engine_id = 0;
     header.engine_type = 0;
     header.sampling_interval = htons(0);
