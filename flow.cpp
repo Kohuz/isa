@@ -20,14 +20,11 @@
 #include "packet.h"
 #include "export.h"
 
-
 #define IPV4_ETHER 2048
-
 
 using namespace std;
 typedef struct netflow5_header netflow5_header;
 typedef struct netflow5_record netflow5_record;
-
 
 typedef unordered_map<tuple_key, flow, key_hash, key_equal> map_t;
 int check_number(char *number)
@@ -50,9 +47,9 @@ int check_number(char *number)
     return num;
 }
 
-
-
-
+tuple<in_addr_t, in_addr_t, int, int, int, int> find_latest(map_t flows)
+{
+}
 
 int main(int argc, char *argv[])
 {
@@ -62,7 +59,6 @@ int main(int argc, char *argv[])
         cerr << usage;
         return EXIT_FAILURE;
     }
-
 
     char *file = NULL;
     string collector_ip = "127.0.0.1:2055";
@@ -165,8 +161,6 @@ int main(int argc, char *argv[])
 
         tuple<in_addr_t, in_addr_t, int, int, int, int> tpl;
 
-
-
         if (htons(ethernet->ether_type) == IPV4_ETHER)
         {
             tpl = ipv4_packet(packet, &length, &fin);
@@ -200,7 +194,8 @@ int main(int argc, char *argv[])
             cout << "SIZE: "
                  << flows.size() << "\n";
 
-            if(flows[tuple_erase].tcp_flags == 1){
+            if (flows[tuple_erase].tcp_flags == 1)
+            {
                 cout << "EXPORTING fin\n\n";
                 export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
                 to_delete.push_back(tuple_erase);
@@ -236,19 +231,23 @@ int main(int argc, char *argv[])
         {
 
             flows[comp_tuple].dPkts++;
-            flows[comp_tuple].dOctets +=  header.caplen-14;
+            flows[comp_tuple].dOctets += header.caplen - 14;
             flows[comp_tuple].last_packet = header.ts.tv_sec;
 
             cout << "added\n";
         }
         else
         {
+            if (flows.size() == limit)
+            {
+                auto latest = find_latest(flows);
+            }
             flows[comp_tuple] = record;
             flows[comp_tuple].first_packet = header.ts.tv_sec;
             flows[comp_tuple].last_packet = header.ts.tv_sec;
             flows[comp_tuple].dPkts = 1;
             flows[comp_tuple].time_sec = difftime(my_time, start_time);
-            flows[comp_tuple].dOctets = header.caplen-14;
+            flows[comp_tuple].dOctets = header.caplen - 14;
 
             cout << "created\n";
         }
@@ -257,7 +256,7 @@ int main(int argc, char *argv[])
     {
         auto to_export = flow->second;
         auto tuple_export = make_tuple(to_export.s_addr, to_export.d_addr,
-                                      to_export.protocol, to_export.s_port, to_export.d_port, to_export.tos);
+                                       to_export.protocol, to_export.s_port, to_export.d_port, to_export.tos);
         export_packet(flows[tuple_export], coll_ip, port, exported_flows);
         exported_flows++;
     }
