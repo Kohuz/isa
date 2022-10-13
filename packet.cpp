@@ -1,5 +1,27 @@
+#include <stdio.h>
+#include <stdlib.h>
 
-tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet, int total_length)
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
+
+#include <netinet/in.h>
+
+#include <iostream>
+#include <tuple>
+#include <unordered_map>
+#include <vector>
+
+#include "map_struct.h"
+#include "structures.h"
+#include "packet.h"
+
+#define SIZE_ETHERNET 14
+#define ICMP_PROTOCOL 1
+#define TCP_PROTOCOL 6
+#define UDP_PROTOCOL 17
+
+tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet, int *length)
 {
     const struct ip *ip;
     ip = (struct ip *)(packet + SIZE_ETHERNET);
@@ -18,7 +40,7 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
     uint8_t protocol = 0;
 
     int size_ip = ip->ip_hl * 4;
-
+    *length = *length-size_ip;
     if (ip->ip_p == ICMP_PROTOCOL)
     {
         protocol = ICMP_PROTOCOL;
@@ -43,3 +65,43 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
     return make_tuple(ntohl(src_ip), ntohl(dst_ip), protocol, src_port, dst_port, tos);
 }
 
+packet assemble_packet(flow flow_record, int sequence)
+{
+    netflow5_header header;
+    header.version = htons(NF_VERSION);
+    header.count = htons(1);
+    header.flow_sequence = htonl(sequence);
+    header.unix_nsecs = 0;
+    header.unix_secs = 0;
+    header.SysUptim = flow_record.time_sec;
+    header.engine_id = 0;
+    header.engine_type = 0;
+    header.sampling_interval = htons(0);
+
+    netflow5_record record;
+    record.srcaddr = htonl(flow_record.s_addr);
+    record.dstaddr = flow_record.d_addr;
+    record.nexthop = 0;
+    record.input = 0;
+    record.output = 0;
+    record.dPkts = htonl(flow_record.dPkts);
+    record.dOctects = htonl(flow_record.dOctets);
+    record.First = htonl(flow_record.first_packet);
+    record.srcport = htons(flow_record.s_port);
+    record.dstport = htons(flow_record.d_port);
+    record.pad1 = 0;
+    record.tcp_flags = 1;
+    record.prot = flow_record.protocol;
+    record.tos = flow_record.tos;
+    record.src_as = 0;
+    record.dst_as = 0;
+    record.src_mask = 0;
+    record.dst_mask = 0;
+    record.pad2 = 0;
+
+    packet pkt;
+    pkt.header = header;
+    pkt.payload = record;
+
+    return pkt;
+}

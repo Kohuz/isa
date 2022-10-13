@@ -1,5 +1,4 @@
-#ifndef _STRUCTURES__H_
-#define _STRUCTURES__H_
+#pragma once
 
 #include <stdint.h>
 #include <time.h>
@@ -63,4 +62,3 @@ struct flow
     time_t first_packet;
 };
 
-#endif
