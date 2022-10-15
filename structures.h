@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <time.h>
 
-
 struct netflow5_header
 {
     uint16_t version;
@@ -56,9 +55,8 @@ struct flow
     uint32_t dOctets;
     uint32_t dPkts;
     uint8_t tos;
-    uint64_t time_sec;
+    uint32_t time_sec;
     bool tcp_flags;
-    time_t last_packet;
-    time_t first_packet;
+    uint32_t last_packet;
+    uint32_t first_packet;
 };
-
