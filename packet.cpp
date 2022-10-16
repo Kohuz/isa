@@ -87,6 +87,8 @@ packet assemble_packet(flow flow_record, int sequence)
     header.count = htons(1);
     header.flow_sequence = htonl(sequence);
     header.SysUptime = htonl(flow_record.time_sec);
+    header.unix_secs = htonl(flow_record.time_sec);
+    header.unix_nsecs = htonl(flow_record.time_nsec);
     header.engine_id = 0;
     header.engine_type = 0;
     header.sampling_interval = htons(0);
@@ -99,11 +101,11 @@ packet assemble_packet(flow flow_record, int sequence)
     record.output = 0;
     record.dPkts = htonl(flow_record.dPkts);
     record.dOctects = htonl(flow_record.dOctets);
-    record.First = htonl(flow_record.first_packet * 1000);
-    record.Last = htonl(flow_record.last_packet * 1000);
-    printf("first: %d\n", flow_record.first_packet - flow_record.time_sec);
-    printf("last: %d\n", flow_record.last_packet - flow_record.time_sec);
-    printf("sysuptime: %d\n", flow_record.time_sec);
+    record.First = htonl(flow_record.first_packet);
+    record.Last = htonl(flow_record.last_packet);
+    // printf("first: %d\n", flow_record.first_packet - flow_record.time_sec);
+    // printf("last: %d\n", flow_record.last_packet - flow_record.time_sec);
+    // printf("sysuptime: %d\n", flow_record.time_sec);
     record.srcport = htons(flow_record.s_port);
     record.dstport = htons(flow_record.d_port);
     record.pad1 = 0;

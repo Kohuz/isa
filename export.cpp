@@ -60,8 +60,8 @@ void export_packet(flow flow, string collector_ip, string port, int sequence)
         exit(1);
     }
 
-    pkt.header.unix_secs = ntohl(time(NULL));
-    pkt.header.unix_nsecs = ntohl(time_point_cast<nanoseconds>(system_clock::now()).time_since_epoch().count());
+    // pkt.header.unix_secs = ntohl(time(NULL));
+    // pkt.header.unix_nsecs = ntohl(time_point_cast<nanoseconds>(system_clock::now()).time_since_epoch().count());
     int i = send(sock, &pkt, sizeof(pkt), 0);
     if (i == -1)
     {
@@ -69,5 +69,4 @@ void export_packet(flow flow, string collector_ip, string port, int sequence)
         printf("eerno: %s\n", strerror(errno));
         exit(1);
     }
-
 }
