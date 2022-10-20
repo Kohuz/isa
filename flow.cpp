@@ -66,7 +66,7 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> find_latest(map_t flows)
 int main(int argc, char *argv[])
 {
     string usage = "./flow [-f <file>] [-c <netflow_collector>[:<port>]] [-a <active_timer>] [-i <inactive_timer>] [-m <count>]\n";
-    if (argc > 7)
+    if (argc > 10)
     {
         cerr << usage;
         return EXIT_FAILURE;
@@ -133,6 +133,7 @@ int main(int argc, char *argv[])
 
     map_t flows;
 
+
     if (!file)
     {
         // TODO: ARGUMENTS
@@ -152,6 +153,18 @@ int main(int argc, char *argv[])
             printf("Could not open file %s: %s\n", argv[1], errbuf);
             exit(-1);
         }
+    }
+
+    struct bpf_program compiled_filter;
+    if (pcap_compile(handle, &compiled_filter, "tcp or udp or icmp", 0, 0) == -1)
+    {
+        fprintf(stderr, "Couldn't parse filter %s: %s\n",  "tcp or udp or icmp", pcap_geterr(handle));
+        exit(EXIT_FAILURE);
+    }
+    if (pcap_setfilter(handle, &compiled_filter) == -1)
+    {
+        fprintf(stderr, "Couldn't install filter %s: %s\n",  "tcp or udp or icmp", pcap_geterr(handle));
+        exit(EXIT_FAILURE);
     }
 
     int exported_flows = 1;
@@ -194,7 +207,7 @@ int main(int argc, char *argv[])
 
         // Try to find it in captured flows
         auto comp_tuple = make_tuple(record.s_addr, record.d_addr, record.protocol, record.s_port, record.d_port, record.tos);
-        auto found = flows.find(comp_tuple);
+
 
         vector<tuple<in_addr_t, in_addr_t, int, int, int, int>> to_delete;
         for (auto flow = flows.begin(); flow != flows.end(); flow++)
@@ -237,6 +250,8 @@ int main(int argc, char *argv[])
         }
         cout << flows.size() << "\n";
 
+
+        auto found = flows.find(comp_tuple);
         if (flows.end() != found)
         {
 
