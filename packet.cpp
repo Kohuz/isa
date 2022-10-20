@@ -53,6 +53,10 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
         {
             *fin = 1;
         }
+        if (tcp->th_flags & TH_RST)
+        {
+            *fin = 1;
+        }
         //        if (tcp->th_flags & TH_ACK){
         //            printf("   Flag: TH_ACK");
         //        }if (tcp->th_flags & TH_URG){

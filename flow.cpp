@@ -226,7 +226,7 @@ int main(int argc, char *argv[])
                 export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
                 to_delete.push_back(tuple_erase);
                 exported_flows++;
-                continue;
+
             }
             else if (inactive_time_diff > inactive_timeout)
             {
@@ -268,6 +268,9 @@ int main(int argc, char *argv[])
             if (flows.size() == limit)
             {
                 auto latest = find_latest(flows);
+                cout << "export memory";
+                export_packet(flows[latest], coll_ip, port, exported_flows);
+                flows.erase(latest);
             }
             flows[comp_tuple] = record;
             flows[comp_tuple].first_packet = my_time;

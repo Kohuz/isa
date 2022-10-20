@@ -1,5 +1,5 @@
 CC		 = g++
-CPPLAGS	 = -Wall
+CXXFLAGS = -Wall -g
 LDFLAGS	 = -lpcap
 OBJFILES = export.o flow.o packet.o
 TARGET	 = flow
@@ -7,7 +7,7 @@ TARGET	 = flow
 all: $(TARGET)
 
 $(TARGET): $(OBJFILES)
-	$(CC) $(CPPLAGS) -o $(TARGET) $(OBJFILES) $(LDFLAGS)
+	$(CC) $(CXXFLAGS) -o  $(TARGET) $(OBJFILES) $(LDFLAGS)
 
 clean:
-	rm -r $(OBJILES) $(TARGET)
+	rm -r $(OBJFILES) $(TARGET)
