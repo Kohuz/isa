@@ -57,7 +57,8 @@ struct flow
     uint8_t tos;
     uint32_t time_sec;
     uint32_t time_nsec;
-    bool tcp_flags;
+    int flags;
+    bool tcp_flag;
     uint32_t last_packet;
     uint32_t first_packet;
 };

@@ -1,5 +1,5 @@
 CC		 = g++
-CXXFLAGS = -Wall -g
+CXXFLAGS = -g
 LDFLAGS	 = -lpcap
 OBJFILES = export.o flow.o packet.o
 TARGET	 = flow

@@ -21,7 +21,7 @@
 #define TCP_PROTOCOL 6
 #define UDP_PROTOCOL 17
 
-tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet, int *length, int *fin)
+tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet, int *length, int *fin, int *flags)
 {
     const struct ip *ip;
     ip = (struct ip *)(packet + SIZE_ETHERNET);
@@ -49,24 +49,30 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
     {
         const struct tcphdr *tcp; /* The TCP header */
         tcp = (struct tcphdr *)(packet + SIZE_ETHERNET + size_ip);
+        *flags = tcp->th_flags;
+        //printf("tcp flags %x\n", tcp->th_flags);
         if (tcp->th_flags & TH_FIN)
         {
             *fin = 1;
+        }
+        if (tcp->th_flags & TH_SYN)
+        {
+
         }
         if (tcp->th_flags & TH_RST)
         {
             *fin = 1;
         }
-        //        if (tcp->th_flags & TH_ACK){
-        //            printf("   Flag: TH_ACK");
-        //        }if (tcp->th_flags & TH_URG){
-        //            printf("   Flag: TH_URG");
-        //        }if (tcp->th_flags & TH_RST){
-        //            printf("   Flag: TH_RST");
-        //        }
-        //        if (tcp->th_flags & TH_SYN){
-        //            printf("   Flag: TH_SYN");
-        //        }
+        if (tcp->th_flags & TH_PUSH)
+        {
+        }
+        if (tcp->th_flags & TH_ACK)
+        {
+
+        }
+
+
+
 
         protocol = TCP_PROTOCOL;
         src_port = ntohs(tcp->th_sport);

@@ -19,6 +19,7 @@
 #include "map_struct.h"
 #include "packet.h"
 #include "export.h"
+#define __FAVOR_BSD
 
 #define IPV4_ETHER 2048
 
@@ -175,7 +176,6 @@ int main(int argc, char *argv[])
         if (i == 0)
         {
             boot_time = header.ts.tv_sec * 1000;
-            printf("THIS IS BOOT TIME %d\n", boot_time);
             i++;
         }
 
@@ -186,12 +186,13 @@ int main(int argc, char *argv[])
         uint32_t my_time = header.ts.tv_sec;
         uint32_t my_time_nsec = header.ts.tv_usec * 1000;
         auto time_for_timeout = header.ts.tv_sec;
+        int flags = 0;
 
         tuple<in_addr_t, in_addr_t, int, int, int, int> tpl;
 
         if (htons(ethernet->ether_type) == IPV4_ETHER)
         {
-            tpl = ipv4_packet(packet, &length, &fin);
+            tpl = ipv4_packet(packet, &length, &fin, &flags);
         }
 
         // Create flow record
@@ -202,7 +203,7 @@ int main(int argc, char *argv[])
         record.s_port = get<3>(tpl);
         record.d_port = get<4>(tpl);
         record.tos = get<5>(tpl);
-        record.tcp_flags = fin;
+        record.tcp_flag = fin;
         fin = 0;
 
         // Try to find it in captured flows
@@ -215,14 +216,13 @@ int main(int argc, char *argv[])
 
             auto inactive_time_diff = my_time - flow->second.last_packet;
             auto active_time_diff = my_time - flow->second.first_packet;
-            // cout << "boot time " << my_time - flow->second.last_packet << "\n";
             auto to_erase = flow->second;
             auto tuple_erase = make_tuple(to_erase.s_addr, to_erase.d_addr,
                                           to_erase.protocol, to_erase.s_port, to_erase.d_port, to_erase.tos);
 
-            if (flows[tuple_erase].tcp_flags == 1)
+            if (flows[tuple_erase].tcp_flag == 1)
             {
-                cout << "EXPORTING fin\n\n";
+                //cout << "EXPORTING fin\n\n";
                 export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
                 to_delete.push_back(tuple_erase);
                 exported_flows++;
@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
             }
             else if (inactive_time_diff > inactive_timeout)
             {
-                cout << "EXPORTING INACTIVE\n\n";
+                //cout << "EXPORTING INACTIVE\n\n";
                 export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
                 to_delete.push_back(tuple_erase);
                 exported_flows++;
@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
 
             else if (active_time_diff > active_timeout)
             {
-                cout << "EXPORTING ACTIVE\n\n";
+                //cout << "EXPORTING ACTIVE\n\n";
                 export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
                 to_delete.push_back(tuple_erase);
                 exported_flows++;
@@ -248,40 +248,43 @@ int main(int argc, char *argv[])
         {
             flows.erase(item);
         }
-        cout << flows.size() << "\n";
+        //cout << flows.size() << "\n";
 
 
         auto found = flows.find(comp_tuple);
+        if (flows.end() == found && flows.size() == limit)
+        {
+            auto latest = find_latest(flows);
+          //  cout << "export memory";
+            export_packet(flows[latest], coll_ip, port, exported_flows);
+            flows.erase(latest);
+        }
         if (flows.end() != found)
         {
 
             flows[comp_tuple].dPkts++;
             flows[comp_tuple].dOctets += header.caplen - 14;
             flows[comp_tuple].last_packet = my_time;
+            flows[comp_tuple].flags = flows[comp_tuple].flags | flags;
             // cout << flows[comp_tuple].last_packet << "\n";
             //  flows[comp_tuple].time_sec = (my_time - start_time);
 
-            cout << "added\n";
+           // cout << "added\n";
         }
         else
         {
-            if (flows.size() == limit)
-            {
-                auto latest = find_latest(flows);
-                cout << "export memory";
-                export_packet(flows[latest], coll_ip, port, exported_flows);
-                flows.erase(latest);
-            }
+
             flows[comp_tuple] = record;
             flows[comp_tuple].first_packet = my_time;
             flows[comp_tuple].last_packet = my_time;
             flows[comp_tuple].dPkts = 1;
             flows[comp_tuple].time_sec = my_time;
+            flows[comp_tuple].flags = flags;
             flows[comp_tuple].time_nsec = my_time_nsec;
 
             flows[comp_tuple].dOctets = header.caplen - 14;
 
-            cout << "created\n";
+           // cout << "created\n";
         }
     }
     for (auto flow = flows.begin(); flow != flows.end(); flow++)
