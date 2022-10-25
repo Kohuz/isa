@@ -61,4 +61,6 @@ struct flow
     bool tcp_flag;
     uint32_t last_packet;
     uint32_t first_packet;
+    long last_usec;
+    long first_usec;
 };

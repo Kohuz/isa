@@ -50,14 +50,13 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
         const struct tcphdr *tcp; /* The TCP header */
         tcp = (struct tcphdr *)(packet + SIZE_ETHERNET + size_ip);
         *flags = tcp->th_flags;
-        //printf("tcp flags %x\n", tcp->th_flags);
+        // printf("tcp flags %x\n", tcp->th_flags);
         if (tcp->th_flags & TH_FIN)
         {
             *fin = 1;
         }
         if (tcp->th_flags & TH_SYN)
         {
-
         }
         if (tcp->th_flags & TH_RST)
         {
@@ -68,11 +67,7 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
         }
         if (tcp->th_flags & TH_ACK)
         {
-
         }
-
-
-
 
         protocol = TCP_PROTOCOL;
         src_port = ntohs(tcp->th_sport);
@@ -113,9 +108,7 @@ packet assemble_packet(flow flow_record, int sequence)
     record.dOctects = htonl(flow_record.dOctets);
     record.First = htonl(flow_record.first_packet);
     record.Last = htonl(flow_record.last_packet);
-    // printf("first: %d\n", flow_record.first_packet - flow_record.time_sec);
-    // printf("last: %d\n", flow_record.last_packet - flow_record.time_sec);
-    // printf("sysuptime: %d\n", flow_record.time_sec);
+
     record.srcport = htons(flow_record.s_port);
     record.dstport = htons(flow_record.d_port);
     record.pad1 = 0;
