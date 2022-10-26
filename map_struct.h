@@ -8,6 +8,7 @@
 #include <tuple>
 #include <unordered_map>
 #include "structures.h"
+#define __FAVOR_BSD
 
 using namespace std;
 

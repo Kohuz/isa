@@ -7,12 +7,14 @@
 #include <iostream>
 #include <string>
 #include <tuple>
+#include <netdb.h>
 #include <chrono>
 
 #include "map_struct.h"
 #include "structures.h"
 #include "packet.h"
 #include "export.h"
+#define __FAVOR_BSD
 
 using namespace std;
 using namespace std::chrono;

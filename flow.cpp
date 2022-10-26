@@ -125,6 +125,7 @@ int main(int argc, char *argv[])
     {
         split_ip.push_back(segment);
     }
+
     string coll_ip = split_ip[0];
     string port = split_ip[1];
     pcap_t *handle;
@@ -263,10 +264,6 @@ int main(int argc, char *argv[])
             flows[comp_tuple].last_packet = my_time;
             flows[comp_tuple].last_usec = time_for_timeout;
             flows[comp_tuple].flags = flows[comp_tuple].flags | flags;
-            // cout << flows[comp_tuple].last_packet << "\n";
-            //  flows[comp_tuple].time_sec = (my_time - start_time);
-
-            // cout << "added\n";
         }
         else
         {

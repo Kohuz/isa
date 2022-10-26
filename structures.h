@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <time.h>
+#define __FAVOR_BSD
 
 struct netflow5_header
 {

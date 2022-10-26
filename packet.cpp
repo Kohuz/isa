@@ -49,37 +49,29 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
     {
         const struct tcphdr *tcp; /* The TCP header */
         tcp = (struct tcphdr *)(packet + SIZE_ETHERNET + size_ip);
-        *flags = tcp->th_flags;
+        // *flags = tcp->th_flags;
         // printf("tcp flags %x\n", tcp->th_flags);
-        if (tcp->th_flags & TH_FIN)
+        if (tcp->fin)
         {
             *fin = 1;
         }
-        if (tcp->th_flags & TH_SYN)
-        {
-        }
-        if (tcp->th_flags & TH_RST)
+
+        if (tcp->rst)
         {
             *fin = 1;
-        }
-        if (tcp->th_flags & TH_PUSH)
-        {
-        }
-        if (tcp->th_flags & TH_ACK)
-        {
         }
 
         protocol = TCP_PROTOCOL;
-        src_port = ntohs(tcp->th_sport);
-        dst_port = ntohs(tcp->th_dport);
+        src_port = ntohs(tcp->source);
+        dst_port = ntohs(tcp->dest);
     }
     else if (ip->ip_p == UDP_PROTOCOL)
     {
         const struct udphdr *udp; /* The TCP header */
         udp = (struct udphdr *)(packet + SIZE_ETHERNET + size_ip);
         protocol = UDP_PROTOCOL;
-        src_port = ntohs(udp->uh_sport);
-        dst_port = ntohs(udp->uh_dport);
+        src_port = ntohs(udp->source);
+        dst_port = ntohs(udp->dest);
     }
 
     return make_tuple(ntohl(src_ip), ntohl(dst_ip), protocol, src_port, dst_port, tos);
