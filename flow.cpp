@@ -29,24 +29,34 @@ typedef struct netflow5_header netflow5_header;
 typedef struct netflow5_record netflow5_record;
 
 typedef unordered_map<tuple_key, flow, key_hash, key_equal> map_t;
-int check_number(char *number)
+int check_number(const char *number)
 {
     char *fail_ptr = NULL;
-    string err_msg = "-n argument has to be a positive integer\n";
+    string err_msg = "Port argument has to be a positive integer\n";
     int num = strtol(number, &fail_ptr, 10);
 
     if (*fail_ptr)
     {
-        cout << err_msg;
+        cerr << err_msg;
         exit(EXIT_FAILURE);
     }
 
     if (num < 1)
     {
-        cout << err_msg;
+        cerr << err_msg;
         exit(EXIT_FAILURE);
     }
     return num;
+}
+void check_port(string port)
+{
+    const char *cstr = port.c_str();
+    int prt_num = check_number(cstr);
+    if (prt_num <= 1023 || prt_num > 65535)
+    {
+        cerr << "Not a valid port number\n";
+        exit(EXIT_FAILURE);
+    }
 }
 
 tuple<in_addr_t, in_addr_t, int, int, int, int> find_latest(map_t flows)
@@ -124,15 +134,27 @@ int main(int argc, char *argv[])
 
     vector<string> split_ip;
     string segment;
-    stringstream strstream(collector_ip);
-    // TODO: HANDLE BAD INPUT
-    while (getline(strstream, segment, ':'))
-    {
-        split_ip.push_back(segment);
-    }
 
-    string coll_ip = split_ip[0];
-    string port = split_ip[1];
+    string coll_ip;
+    string port;
+    stringstream strstream(collector_ip);
+    if (collector_ip.find(':') == string::npos)
+    {
+        coll_ip = collector_ip;
+        port = "2055";
+    }
+    else
+    {
+        while (getline(strstream, segment, ':'))
+        {
+            split_ip.push_back(segment);
+        }
+        coll_ip = split_ip[0];
+        port = split_ip[1];
+        check_port(port);
+    }
+    // TODO: HANDLE BAD INPUT
+
     pcap_t *handle;
     char errbuf[PCAP_ERRBUF_SIZE];
     struct pcap_pkthdr header;
@@ -215,6 +237,7 @@ int main(int argc, char *argv[])
         auto comp_tuple = make_tuple(record.s_addr, record.d_addr, record.protocol, record.s_port, record.d_port, record.tos);
 
         vector<tuple<in_addr_t, in_addr_t, int, int, int, int>> to_delete;
+        vector<flow> to_sort;
         for (auto flow = flows.begin(); flow != flows.end(); flow++)
         {
 
@@ -227,14 +250,15 @@ int main(int argc, char *argv[])
             if (flows[tuple_erase].tcp_flag == 1)
             {
                 cout << "EXPORTING fin\n\n";
-                export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
+                to_sort.push_back(flows[tuple_erase]);
                 to_delete.push_back(tuple_erase);
                 exported_flows++;
             }
             else if (inactive_time_diff > inactive_timeout * 1000000)
             {
                 // cout << "EXPORTING INACTIVE\n\n";
-                export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
+                // export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
+                to_sort.push_back(flows[tuple_erase]);
                 to_delete.push_back(tuple_erase);
                 exported_flows++;
             }
@@ -242,11 +266,20 @@ int main(int argc, char *argv[])
             else if (active_time_diff > active_timeout * 1000000)
             {
                 // cout << "EXPORTING ACTIVE\n\n";
-                export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
+                to_sort.push_back(flows[tuple_erase]);
+                // export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
                 to_delete.push_back(tuple_erase);
                 exported_flows++;
             }
         }
+
+        sort(to_sort.begin(), to_sort.end(), compareFlows);
+        for (auto flow : to_sort)
+        {
+            export_packet(flow, coll_ip, port, exported_flows);
+            cout << "EXPORTING timers\n";
+        }
+
         for (auto const &item : to_delete)
         {
             flows.erase(item);
