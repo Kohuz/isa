@@ -53,11 +53,13 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
         // printf("tcp flags %x\n", tcp->th_flags);
         if (tcp->fin)
         {
+            cout << "tcpfin " << tcp->fin << "\n";
             *fin = 1;
         }
 
         if (tcp->rst)
         {
+            cout << "rst " << tcp->rst << "\n";
             *fin = 1;
         }
 

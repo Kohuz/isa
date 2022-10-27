@@ -12,9 +12,10 @@
 #include <errno.h>
 #include <iostream>
 #include <tuple>
-#include <unordered_map>
+#include <map>
 #include <vector>
 #include <sstream>
+#include <bits/stdc++.h>
 #include "structures.h"
 #include "map_struct.h"
 #include "packet.h"
@@ -64,6 +65,10 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> find_latest(map_t flows)
                       to_return.protocol, to_return.s_port, to_return.d_port, to_return.tos);
 }
 
+bool compareFlows(flow f1, flow f2)
+{
+    return (f1.first_usec < f2.first_usec);
+}
 int main(int argc, char *argv[])
 {
     string usage = "./flow [-f <file>] [-c <netflow_collector>[:<port>]] [-a <active_timer>] [-i <inactive_timer>] [-m <count>]\n";
@@ -221,7 +226,7 @@ int main(int argc, char *argv[])
 
             if (flows[tuple_erase].tcp_flag == 1)
             {
-                // cout << "EXPORTING fin\n\n";
+                cout << "EXPORTING fin\n\n";
                 export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
                 to_delete.push_back(tuple_erase);
                 exported_flows++;
@@ -283,13 +288,23 @@ int main(int argc, char *argv[])
             // cout << "created\n";
         }
     }
+    vector<flow> to_sort;
     for (auto flow = flows.begin(); flow != flows.end(); flow++)
     {
-        auto to_export = flow->second;
-        auto tuple_export = make_tuple(to_export.s_addr, to_export.d_addr,
-                                       to_export.protocol, to_export.s_port, to_export.d_port, to_export.tos);
-        export_packet(flows[tuple_export], coll_ip, port, exported_flows);
-        exported_flows++;
+        to_sort.push_back(flow->second);
+    }
+    sort(to_sort.begin(), to_sort.end(), compareFlows);
+    for (auto flow : to_sort)
+    {
+        export_packet(flow, coll_ip, port, exported_flows);
         cout << "EXPORTING AFTER END\n";
     }
+    // for (auto flow = flows.begin(); flow != flows.end(); flow++)
+    // {
+    //     auto to_export = flow->second;
+    //     auto tuple_export = make_tuple(to_export.s_addr, to_export.d_addr,
+    //                                    to_export.protocol, to_export.s_port, to_export.d_port, to_export.tos);
+    //     export_packet(flows[tuple_export], coll_ip, port, exported_flows);
+    //     exported_flows++;
+    // }
 }
