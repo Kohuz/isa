@@ -40,7 +40,8 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
     uint8_t protocol = 0;
 
     int size_ip = ip->ip_hl * 4;
-    *length = *length - size_ip;
+    *length = ip->ip_len;
+    //*length = *length - size_ip;
     if (ip->ip_p == ICMP_PROTOCOL)
     {
         protocol = ICMP_PROTOCOL;
@@ -54,14 +55,35 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
         if (tcp->fin)
         {
             cout << "tcpfin " << tcp->fin << "\n";
+            *flags += 1;
             *fin = 1;
         }
 
+        if (tcp->syn)
+        {
+
+            *flags += 2;
+        }
         if (tcp->rst)
         {
-            cout << "rst " << tcp->rst << "\n";
-            *fin = 1;
+
+            *flags += 4;
         }
+        if (tcp->psh)
+        {
+            *flags += 8;
+        }
+        if (tcp->ack)
+        {
+
+            *flags += 16;
+        }
+        if (tcp->urg)
+        {
+
+            *flags += 32;
+        }
+        /// cout << "flag: " << *flags << "\n";
 
         protocol = TCP_PROTOCOL;
         src_port = ntohs(tcp->source);
@@ -106,7 +128,7 @@ packet assemble_packet(flow flow_record, int sequence)
     record.srcport = htons(flow_record.s_port);
     record.dstport = htons(flow_record.d_port);
     record.pad1 = 0;
-    record.tcp_flags = 1;
+    record.tcp_flags = flow_record.tcp_flag;
     record.prot = flow_record.protocol;
     record.tos = flow_record.tos;
     record.src_as = 0;

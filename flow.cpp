@@ -94,15 +94,6 @@ int main(int argc, char *argv[])
     int inactive_timeout = 10;
     int limit = 1024;
 
-    /***************************************************************************************
-     *    Title:  Optional arguments with getopt_long(3)
-     *    Author: Lars Erik Wik
-     *    Date: August 13, 2021
-     *    Availability: https://cfengine.com/blog/2021/optional-arguments-with-getopt-long/
-     *
-     ***************************************************************************************/
-    // The argument parsing was inspired by the mentioned above
-
     int option;
 
     while ((option = getopt(argc, argv, "f:c:a:i:m:")) != -1)
@@ -208,7 +199,7 @@ int main(int argc, char *argv[])
 
         const struct ether_header *ethernet; /* The ethernet header */
         ethernet = (struct ether_header *)(packet);
-        int length = header.caplen;
+        int length;
         int fin = 0;
         uint32_t my_time = header.ts.tv_sec;
         uint32_t my_time_nsec = header.ts.tv_usec * 1000;
@@ -238,6 +229,23 @@ int main(int argc, char *argv[])
 
         vector<tuple<in_addr_t, in_addr_t, int, int, int, int>> to_delete;
         vector<flow> to_sort;
+        for (auto flow = flows.begin(); flow != flows.end(); flow++)
+        {
+
+            auto inactive_time_diff = time_for_timeout - flow->second.last_usec;
+            auto active_time_diff = time_for_timeout - flow->second.first_usec;
+            auto to_erase = flow->second;
+            auto tuple_erase = make_tuple(to_erase.s_addr, to_erase.d_addr,
+                                          to_erase.protocol, to_erase.s_port, to_erase.d_port, to_erase.tos);
+
+            if (flows[tuple_erase].tcp_flag == 1)
+            {
+                cout << "EXPORTING fin\n\n";
+                to_sort.push_back(flows[tuple_erase]);
+                to_delete.push_back(tuple_erase);
+                exported_flows++;
+            }
+        }
         for (auto flow = flows.begin(); flow != flows.end(); flow++)
         {
 
@@ -290,7 +298,7 @@ int main(int argc, char *argv[])
         if (flows.end() == found && flows.size() == limit)
         {
             auto latest = find_latest(flows);
-            //  cout << "export memory";
+            cout << "export memory\n";
             export_packet(flows[latest], coll_ip, port, exported_flows);
             flows.erase(latest);
         }
@@ -330,14 +338,7 @@ int main(int argc, char *argv[])
     for (auto flow : to_sort)
     {
         export_packet(flow, coll_ip, port, exported_flows);
+        exported_flows++;
         cout << "EXPORTING AFTER END\n";
     }
-    // for (auto flow = flows.begin(); flow != flows.end(); flow++)
-    // {
-    //     auto to_export = flow->second;
-    //     auto tuple_export = make_tuple(to_export.s_addr, to_export.d_addr,
-    //                                    to_export.protocol, to_export.s_port, to_export.d_port, to_export.tos);
-    //     export_packet(flows[tuple_export], coll_ip, port, exported_flows);
-    //     exported_flows++;
-    // }
 }
