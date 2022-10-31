@@ -68,6 +68,7 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
         {
 
             *flags += 4;
+            *fin = 1;
         }
         if (tcp->psh)
         {

@@ -226,6 +226,35 @@ int main(int argc, char *argv[])
 
         // Try to find it in captured flows
         auto comp_tuple = make_tuple(record.s_addr, record.d_addr, record.protocol, record.s_port, record.d_port, record.tos);
+        if (record.tcp_flag == 1)
+        {
+            auto fin_found = flows.find(comp_tuple);
+            if (flows.end() != fin_found)
+            {
+
+                flows[comp_tuple].dPkts++;
+                flows[comp_tuple].dOctets += header.caplen - 14;
+                flows[comp_tuple].last_packet = my_time;
+                flows[comp_tuple].last_usec = time_for_timeout;
+                flows[comp_tuple].flags = flows[comp_tuple].flags | flags;
+                export_packet(flows[comp_tuple], coll_ip, port, exported_flows);
+
+                flows.erase(fin_found);
+                exported_flows++;
+            }
+
+            else
+            {
+                record.dPkts = 1;
+                record.time_sec = my_time;
+                record.flags = flags;
+                record.time_nsec = my_time_nsec;
+                record.first_packet = my_time;
+                record.last_packet = my_time;
+                record.dOctets = header.caplen - 14;
+                export_packet(record, coll_ip, port, exported_flows);
+            }
+        }
 
         vector<tuple<in_addr_t, in_addr_t, int, int, int, int>> to_delete;
         vector<flow> to_sort;
@@ -238,13 +267,13 @@ int main(int argc, char *argv[])
             auto tuple_erase = make_tuple(to_erase.s_addr, to_erase.d_addr,
                                           to_erase.protocol, to_erase.s_port, to_erase.d_port, to_erase.tos);
 
-            if (flows[tuple_erase].tcp_flag == 1)
-            {
-                cout << "EXPORTING fin\n\n";
-                to_sort.push_back(flows[tuple_erase]);
-                to_delete.push_back(tuple_erase);
-                exported_flows++;
-            }
+            // if (flows[tuple_erase].tcp_flag == 1)
+            // {
+            //     cout << "EXPORTING fin\n\n";
+            //     to_sort.push_back(flows[tuple_erase]);
+            //     to_delete.push_back(tuple_erase);
+            //     exported_flows++;
+            // }
         }
         for (auto flow = flows.begin(); flow != flows.end(); flow++)
         {
@@ -255,14 +284,14 @@ int main(int argc, char *argv[])
             auto tuple_erase = make_tuple(to_erase.s_addr, to_erase.d_addr,
                                           to_erase.protocol, to_erase.s_port, to_erase.d_port, to_erase.tos);
 
-            if (flows[tuple_erase].tcp_flag == 1)
-            {
-                cout << "EXPORTING fin\n\n";
-                to_sort.push_back(flows[tuple_erase]);
-                to_delete.push_back(tuple_erase);
-                exported_flows++;
-            }
-            else if (inactive_time_diff > inactive_timeout * 1000000)
+            // if (flows[tuple_erase].tcp_flag == 1)
+            // {
+            //     cout << "EXPORTING fin\n\n";
+            //     to_sort.push_back(flows[tuple_erase]);
+            //     to_delete.push_back(tuple_erase);
+            //     exported_flows++;
+            // }
+            if (inactive_time_diff > inactive_timeout * 1000000)
             {
                 // cout << "EXPORTING INACTIVE\n\n";
                 // export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
@@ -293,7 +322,10 @@ int main(int argc, char *argv[])
             flows.erase(item);
         }
         // cout << flows.size() << "\n";
-
+        if (record.tcp_flag == 1)
+        {
+            continue;
+        }
         auto found = flows.find(comp_tuple);
         if (flows.end() == found && flows.size() == limit)
         {
