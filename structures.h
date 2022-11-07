@@ -1,8 +1,12 @@
 #pragma once
-
+#define __FAVOR_BSD
 #include <stdint.h>
 #include <time.h>
-#define __FAVOR_BSD
+
+#include <tuple>
+#include "structures.h"
+
+using namespace std;
 
 struct netflow5_header
 {
@@ -16,7 +20,7 @@ struct netflow5_header
     uint8_t engine_id;
     uint16_t sampling_interval;
 };
-// https://github.com/aabc/ipt-netflow/blob/master/ipt_NETFLOW.h
+
 struct netflow5_record
 {
     uint32_t srcaddr;
@@ -65,3 +69,7 @@ struct flow
     long last_usec;
     long first_usec;
 };
+
+// src and dst addresses, protocol, ports, tos
+typedef tuple<in_addr_t, in_addr_t, int, int, int, int>
+        tuple_key;

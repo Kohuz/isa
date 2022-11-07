@@ -3,15 +3,9 @@
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
-
 #include <netinet/in.h>
-
 #include <iostream>
 #include <tuple>
-#include <unordered_map>
-#include <vector>
-
-#include "map_struct.h"
 #include "structures.h"
 #include "packet.h"
 
@@ -30,7 +24,7 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
         fprintf(stderr, "Invalid version in the ip header");
         exit(EXIT_FAILURE);
     }
-    // print_ipv4(ip);
+
 
     auto src_ip = ip->ip_src.s_addr;
     auto dst_ip = ip->ip_dst.s_addr;
@@ -41,7 +35,7 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
 
     int size_ip = ip->ip_hl * 4;
     *length = ip->ip_len;
-    //*length = *length - size_ip;
+
     if (ip->ip_p == ICMP_PROTOCOL)
     {
         protocol = ICMP_PROTOCOL;
@@ -50,8 +44,7 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
     {
         const struct tcphdr *tcp; /* The TCP header */
         tcp = (struct tcphdr *)(packet + SIZE_ETHERNET + size_ip);
-        // *flags = tcp->th_flags;
-        // printf("tcp flags %x\n", tcp->th_flags);
+
         if (tcp->fin)
         {
             cout << "tcpfin " << tcp->fin << "\n";
@@ -84,7 +77,6 @@ tuple<in_addr_t, in_addr_t, int, int, int, int> ipv4_packet(const u_char *packet
 
             *flags += 32;
         }
-        /// cout << "flag: " << *flags << "\n";
 
         protocol = TCP_PROTOCOL;
         src_port = ntohs(tcp->source);

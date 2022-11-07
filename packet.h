@@ -1,7 +1,3 @@
-//
-// Created by kohuz on 13.10.22.
-//
-
 #pragma once
 #include <tuple>
 #define NF_VERSION 5

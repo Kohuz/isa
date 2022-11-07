@@ -1,25 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <string.h>
 #include <getopt.h>
-#include <stdbool.h>
 #include <pcap/pcap.h>
-
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
-#include <time.h>
-#include <errno.h>
 #include <iostream>
 #include <tuple>
 #include <map>
 #include <vector>
-#include <sstream>
 #include <bits/stdc++.h>
 #include "structures.h"
-#include "map_struct.h"
 #include "packet.h"
 #include "export.h"
+#include "helpers.h"
 #define __FAVOR_BSD
 
 #define IPV4_ETHER 2048
@@ -28,57 +22,6 @@ using namespace std;
 typedef struct netflow5_header netflow5_header;
 typedef struct netflow5_record netflow5_record;
 
-typedef unordered_map<tuple_key, flow, key_hash, key_equal> map_t;
-int check_number(const char *number)
-{
-    char *fail_ptr = NULL;
-    string err_msg = "Port argument has to be a positive integer\n";
-    int num = strtol(number, &fail_ptr, 10);
-
-    if (*fail_ptr)
-    {
-        cerr << err_msg;
-        exit(EXIT_FAILURE);
-    }
-
-    if (num < 1)
-    {
-        cerr << err_msg;
-        exit(EXIT_FAILURE);
-    }
-    return num;
-}
-void check_port(string port)
-{
-    const char *cstr = port.c_str();
-    int prt_num = check_number(cstr);
-    if (prt_num <= 1023 || prt_num > 65535)
-    {
-        cerr << "Not a valid port number\n";
-        exit(EXIT_FAILURE);
-    }
-}
-
-tuple<in_addr_t, in_addr_t, int, int, int, int> find_latest(map_t flows)
-{
-    auto latest = flows.begin();
-
-    for (auto flow = flows.begin(); flow != flows.end(); flow++)
-    {
-        if (flow->second.last_packet > latest->second.last_packet)
-        {
-            latest = flow;
-        }
-    }
-    auto to_return = latest->second;
-    return make_tuple(to_return.s_addr, to_return.d_addr,
-                      to_return.protocol, to_return.s_port, to_return.d_port, to_return.tos);
-}
-
-bool compareFlows(flow f1, flow f2)
-{
-    return (f1.first_usec < f2.first_usec);
-}
 int main(int argc, char *argv[])
 {
     string usage = "./flow [-f <file>] [-c <netflow_collector>[:<port>]] [-a <active_timer>] [-i <inactive_timer>] [-m <count>]\n";
@@ -151,7 +94,8 @@ int main(int argc, char *argv[])
     struct pcap_pkthdr header;
     const uint8_t *packet;
 
-    map_t flows;
+    map<tuple_key , flow> flows;
+    //map_t flows;
 
     if (!file)
     {
@@ -187,16 +131,9 @@ int main(int argc, char *argv[])
     }
 
     int exported_flows = 1;
-    int boot_time;
-    int i = 0;
+
     while (packet = pcap_next(handle, &header))
     {
-        if (i == 0)
-        {
-            boot_time = header.ts.tv_sec * 1000;
-            i++;
-        }
-
         const struct ether_header *ethernet; /* The ethernet header */
         ethernet = (struct ether_header *)(packet);
         int length;
@@ -258,6 +195,7 @@ int main(int argc, char *argv[])
 
         vector<tuple<in_addr_t, in_addr_t, int, int, int, int>> to_delete;
         vector<flow> to_sort;
+
         for (auto flow = flows.begin(); flow != flows.end(); flow++)
         {
 
@@ -267,34 +205,9 @@ int main(int argc, char *argv[])
             auto tuple_erase = make_tuple(to_erase.s_addr, to_erase.d_addr,
                                           to_erase.protocol, to_erase.s_port, to_erase.d_port, to_erase.tos);
 
-            // if (flows[tuple_erase].tcp_flag == 1)
-            // {
-            //     cout << "EXPORTING fin\n\n";
-            //     to_sort.push_back(flows[tuple_erase]);
-            //     to_delete.push_back(tuple_erase);
-            //     exported_flows++;
-            // }
-        }
-        for (auto flow = flows.begin(); flow != flows.end(); flow++)
-        {
 
-            auto inactive_time_diff = time_for_timeout - flow->second.last_usec;
-            auto active_time_diff = time_for_timeout - flow->second.first_usec;
-            auto to_erase = flow->second;
-            auto tuple_erase = make_tuple(to_erase.s_addr, to_erase.d_addr,
-                                          to_erase.protocol, to_erase.s_port, to_erase.d_port, to_erase.tos);
-
-            // if (flows[tuple_erase].tcp_flag == 1)
-            // {
-            //     cout << "EXPORTING fin\n\n";
-            //     to_sort.push_back(flows[tuple_erase]);
-            //     to_delete.push_back(tuple_erase);
-            //     exported_flows++;
-            // }
             if (inactive_time_diff > inactive_timeout * 1000000)
             {
-                // cout << "EXPORTING INACTIVE\n\n";
-                // export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
                 to_sort.push_back(flows[tuple_erase]);
                 to_delete.push_back(tuple_erase);
                 exported_flows++;
@@ -302,9 +215,7 @@ int main(int argc, char *argv[])
 
             else if (active_time_diff > active_timeout * 1000000)
             {
-                // cout << "EXPORTING ACTIVE\n\n";
                 to_sort.push_back(flows[tuple_erase]);
-                // export_packet(flows[tuple_erase], coll_ip, port, exported_flows);
                 to_delete.push_back(tuple_erase);
                 exported_flows++;
             }

@@ -1,7 +1,7 @@
 CC		 = g++
 CXXFLAGS = -g
 LDFLAGS	 = -lpcap
-OBJFILES = export.o flow.o packet.o
+OBJFILES = export.o flow.o packet.o helpers.o
 TARGET	 = flow
 
 all: $(TARGET)

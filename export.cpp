@@ -2,22 +2,18 @@
 #include <string.h>
 #include <pcap/pcap.h>
 #include <netinet/in.h>
-#include <time.h>
 #include <errno.h>
 #include <iostream>
 #include <string>
-#include <tuple>
 #include <netdb.h>
-#include <chrono>
 
-#include "map_struct.h"
 #include "structures.h"
 #include "packet.h"
 #include "export.h"
 #define __FAVOR_BSD
 
 using namespace std;
-using namespace std::chrono;
+
 // from isa prednaska
 void export_packet(flow flow, string collector_ip, string port, int sequence)
 {
@@ -53,17 +49,13 @@ void export_packet(flow flow, string collector_ip, string port, int sequence)
         exit(1);
     }
 
-    // TODO: sequence number
     packet pkt = assemble_packet(flow, sequence);
-
     if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == -1)
     {
         printf("eerno: %s\n", strerror(errno));
         exit(1);
     }
 
-    // pkt.header.unix_secs = ntohl(time(NULL));
-    // pkt.header.unix_nsecs = ntohl(time_point_cast<nanoseconds>(system_clock::now()).time_since_epoch().count());
     int i = send(sock, &pkt, sizeof(pkt), 0);
     if (i == -1)
     {
