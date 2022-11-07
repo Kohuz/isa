@@ -6,7 +6,7 @@
 #include <iostream>
 #include <string>
 #include <netdb.h>
-
+#include <unistd.h>
 #include "structures.h"
 #include "packet.h"
 #include "export.h"
@@ -63,4 +63,5 @@ void export_packet(flow flow, string collector_ip, string port, int sequence)
         printf("eerno: %s\n", strerror(errno));
         exit(1);
     }
+	close(sock);
 }
