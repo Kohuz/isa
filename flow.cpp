@@ -25,20 +25,16 @@ typedef struct netflow5_record netflow5_record;
 int main(int argc, char *argv[])
 {
     string usage = "./flow [-f <file>] [-c <netflow_collector>[:<port>]] [-a <active_timer>] [-i <inactive_timer>] [-m <count>]\n";
-    if (argc > 10)
-    {
-        cerr << usage;
-        return EXIT_FAILURE;
-    }
 
+    // Default Values
     char *file = NULL;
     string collector_ip = "127.0.0.1:2055";
     int active_timeout = 60;
     int inactive_timeout = 10;
     int limit = 1024;
 
+    // Argument handling
     int option;
-
     while ((option = getopt(argc, argv, "f:c:a:i:m:")) != -1)
     {
         switch (option)
@@ -66,9 +62,9 @@ int main(int argc, char *argv[])
         }
     }
 
+    // Port number handling
     vector<string> split_ip;
     string segment;
-
     string coll_ip;
     string port;
     stringstream strstream(collector_ip);
@@ -87,29 +83,27 @@ int main(int argc, char *argv[])
         port = split_ip[1];
         check_port(port);
     }
-    // TODO: HANDLE BAD INPUT
 
+    // Initialize structures
     pcap_t *handle;
     char errbuf[PCAP_ERRBUF_SIZE];
     struct pcap_pkthdr header;
     const uint8_t *packet;
+    map<tuple_key, flow> flows;
+    int exported_flows = 1;
 
-    map<tuple_key , flow> flows;
-    //map_t flows;
-
+    // Read in the file either from STDIN or -f option
     if (!file)
     {
-        // TODO: ARGUMENTS
         handle = pcap_open_offline("-", errbuf);
         if (handle == NULL)
         {
-            printf("Could not open file %s: %s\n", argv[1], errbuf);
+            printf("Could read the pcap file from stdin: %s\n", errbuf);
             exit(-1);
         }
     }
     else
     {
-        // handle = pcap_fopen_offline(stdin, errbuf);
         handle = pcap_open_offline(file, errbuf);
         if (handle == NULL)
         {
@@ -118,6 +112,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    // Install filters for tcp/udp/icmp packets
     struct bpf_program compiled_filter;
     if (pcap_compile(handle, &compiled_filter, "tcp or udp or icmp", 0, 0) == -1)
     {
@@ -130,11 +125,10 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    int exported_flows = 1;
-
+    // Loop through the pcap file
     while (packet = pcap_next(handle, &header))
     {
-        const struct ether_header *ethernet; /* The ethernet header */
+        const struct ether_header *ethernet;
         ethernet = (struct ether_header *)(packet);
         int length;
         int fin = 0;
@@ -161,8 +155,8 @@ int main(int argc, char *argv[])
         record.tcp_flag = fin;
         fin = 0;
 
-        // Try to find it in captured flows
         auto comp_tuple = make_tuple(record.s_addr, record.d_addr, record.protocol, record.s_port, record.d_port, record.tos);
+        // Check for the tcp fin/rst flags
         if (record.tcp_flag == 1)
         {
             auto fin_found = flows.find(comp_tuple);
@@ -196,6 +190,7 @@ int main(int argc, char *argv[])
         vector<tuple<in_addr_t, in_addr_t, int, int, int, int>> to_delete;
         vector<flow> to_sort;
 
+        // Check for flows to export
         for (auto flow = flows.begin(); flow != flows.end(); flow++)
         {
 
@@ -204,7 +199,6 @@ int main(int argc, char *argv[])
             auto to_erase = flow->second;
             auto tuple_erase = make_tuple(to_erase.s_addr, to_erase.d_addr,
                                           to_erase.protocol, to_erase.s_port, to_erase.d_port, to_erase.tos);
-
 
             if (inactive_time_diff > inactive_timeout * 1000000)
             {
@@ -221,27 +215,28 @@ int main(int argc, char *argv[])
             }
         }
 
+        // Sort flows, delete them from map and export them
         sort(to_sort.begin(), to_sort.end(), compareFlows);
         for (auto flow : to_sort)
         {
             export_packet(flow, coll_ip, port, exported_flows);
-            cout << "EXPORTING timers\n";
         }
 
         for (auto const &item : to_delete)
         {
             flows.erase(item);
         }
-        // cout << flows.size() << "\n";
+
         if (record.tcp_flag == 1)
         {
             continue;
         }
+
+        // Check if the current packet is in flows, create or increment based on it
         auto found = flows.find(comp_tuple);
         if (flows.end() == found && flows.size() == limit)
         {
             auto latest = find_latest(flows);
-            cout << "export memory\n";
             export_packet(flows[latest], coll_ip, port, exported_flows);
             flows.erase(latest);
         }
@@ -268,10 +263,10 @@ int main(int argc, char *argv[])
             flows[comp_tuple].time_nsec = my_time_nsec;
 
             flows[comp_tuple].dOctets = header.caplen - 14;
-
-            // cout << "created\n";
         }
     }
+
+    // After loop export the remaining packets
     vector<flow> to_sort;
     for (auto flow = flows.begin(); flow != flows.end(); flow++)
     {
@@ -282,6 +277,5 @@ int main(int argc, char *argv[])
     {
         export_packet(flow, coll_ip, port, exported_flows);
         exported_flows++;
-        cout << "EXPORTING AFTER END\n";
     }
 }

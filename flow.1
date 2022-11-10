@@ -1,0 +1,32 @@
+.TH man 1 "10 November 2022" "1.0" "NetFlow man page"
+.SH NAME
+flow \- NetFlow exporter 
+.SH SYNOPSIS
+flow [options]
+.SH DESCRIPTION
+flow is a C++ program to emulate a NetFlow exporter. It reads a pcap file either through the -f option or from STDIN and exports flows based on other options.
+.SH OPTIONS
+.TP
+-f <file>
+name of the analyzed file, default is STDIN.
+.TP
+-c <neflow_collector:port>
+IP address or hostname of a NetFlow collector, optional port number, default is 2055.
+.TP
+-a <active_timer>
+interval in seconds after which the active flows are exported to collector, default is 60.
+.TP
+-i <seconds>
+interval in seconds after which the inactive flows are exported to collector, default is 10.
+.TP
+-m <count>
+size of the flow-cache. After reaching the maximum capacity, the oldest flow is exported to the collector, default is 1024.
+.SH EXAMPLES
+.TP
+flow -f example.pcap -a 20 -i 5 -m 3
+reads the example.pcap file and sets the timers for 20 and 5 seconds respectively, also sets the memory size to 3.
+.TP
+flow -f example.pcap -c localhost:2055
+reads the example.pcap file and exports the flows to localhost port 2055, with other values using the default.
+.SH AUTHOR
+Jakub Kozubek (xkozub07@stud.fit.vutbr.cz)

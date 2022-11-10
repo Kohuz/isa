@@ -14,7 +14,7 @@
 
 using namespace std;
 
-// from isa prednaska
+// This function was taken from materials to the ISA subject, specifically echo-udp-client2.c file.
 void export_packet(flow flow, string collector_ip, string port, int sequence)
 {
     // TODO: check port is a number
@@ -63,5 +63,5 @@ void export_packet(flow flow, string collector_ip, string port, int sequence)
         printf("eerno: %s\n", strerror(errno));
         exit(1);
     }
-	close(sock);
+    close(sock);
 }

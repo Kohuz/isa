@@ -8,6 +8,11 @@
 
 using namespace std;
 
+/**
+ * @brief Represents headers and record based on the cisco documentation:
+ * https://www.cisco.com/c/en/us/td/docs/net_mgmt/netflow_collection_engine/3-6/user/guide/format.html#wp1006108
+ *
+ */
 struct netflow5_header
 {
     uint16_t version;
@@ -50,6 +55,11 @@ struct packet
     netflow5_header header;
     netflow5_record payload;
 };
+
+/**
+ * @brief Represents one flow in the map structure
+ *
+ */
 struct flow
 {
     in_addr_t s_addr;
@@ -70,6 +80,6 @@ struct flow
     long first_usec;
 };
 
-// src and dst addresses, protocol, ports, tos
+// Key to identify flows
 typedef tuple<in_addr_t, in_addr_t, int, int, int, int>
-        tuple_key;
+    tuple_key;
